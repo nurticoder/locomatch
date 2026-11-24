@@ -1,15 +1,25 @@
 {
   "name": "locomatch",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "FarmShare verified product-to-buyer outreach MVP for CCAI9022",
   "scripts": {
-    "start": "node server.mjs",
+    "start": "npm run build && node server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check dist/app.js && node --check dist/domain.js"
+    "check": "node --check public/app.js && node --check public/domain.js && node --check public/easy.js && node --check public/capture-domain.js && node --check server/api.mjs && node --check server/bot.mjs && node --check server/store.mjs",
+    "build": "node scripts/build.mjs",
+    "db:generate": "drizzle-kit generate"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.4",
+    "esbuild": "^0.28.2"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }

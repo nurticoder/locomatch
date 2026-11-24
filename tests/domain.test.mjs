@@ -9,7 +9,7 @@ import {
   createMessage,
   parseCSV,
   csvCell,
-} from "../dist/domain.js";
+} from "../public/domain.js";
 const setup = () => {
   const s = seedState();
   return { s, p: s.products[0], b: s.buyers[0] };

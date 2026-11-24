@@ -1,67 +1,66 @@
 # LoCoMatch
 
-A working FarmShare outreach prototype for **HKU CCAI9022, Group 3**. It turns product records into buyer offers through four accountable steps: capture, verify, match, and draft/review.
+A working **FarmShare / CCAI9022 Group 3** prototype: simple stock entry, shared records, explainable customer matching and a real WhatsApp webhook.
 
-## Run it
+## Run locally
 
-Requires Node.js 20 or newer. No packages, API keys, account or build step are needed.
+Requires Node.js 22.13 or newer.
 
 ```sh
+npm ci
 npm start
 ```
 
-Open http://127.0.0.1:5173. For a different local port, run `PORT=5180 npm start`.
+Open http://127.0.0.1:5173. Choose **Start demo workspace** once to load fictional products and customers. Local data is stored in ignored `.local-state/locomatch.sqlite`. The local server listens only on loopback; it is a development preview, not a public production server.
 
 ```sh
 npm run check
 npm test
+npm run build
 ```
 
-The `dist/` directory can be served by any static host. `.openai/hosting.json` binds the private Sites deployment. The Node server is a local preview server, not a production application backend.
+## For production staff
 
-## Three-minute demonstration
+The first page offers three large actions: **Speak an update**, **Take or upload a photo**, and **Type a short update**. Review the suggested product, quantity and expiry, then save for sales review. A known product reuses its price/storage/delivery settings as suggestions; a new batch still requires verification.
 
-1. Start at the **Workspace**. Explain that the records and buyers are fictional.
-2. Open **Roselle jam**. The missing approved price prevents verification. Choose **Complete product details**, set a sample price of **40**, and save. Enter a reviewer name, check the source-review checklist and choose **Verify & find buyers**.
-3. Return to the workspace and choose **Find suitable buyers** for **Orange marmalade**. Four of ten buyers qualify. Expand **Why this match?**; show an excluded buyer whose budget or quantity does not fit.
-4. Choose **Prepare offer**. Edit an English or Traditional Chinese message. Complete the review checklist and approve it. Copy/download the offer, or select WhatsApp format and explicitly open WhatsApp after review. No message is sent by LoCoMatch.
-5. Record a follow-up and open **Outreach**. Use **Demo & pilot guide → Reset demo** to prepare the next run.
+Speech uses the browser's recognition service with Cantonese requested. Availability depends on the browser/device and may require an internet connection. The photo route runs Tesseract OCR in the browser; it downloads recognition models, but the photo is not sent to an OCR API. Printed sheets work better than handwriting. Both inputs retain an ordinary text-editing fallback. No OpenAI API key is needed or used.
 
-## Implemented
+## For sales staff
 
-- Responsive workbench, product records, buyer directory, outreach tracker and pilot guide.
-- English / Traditional Chinese interface and editable message templates.
-- Product entry and CSV import with source tracking. Imports always require new verification.
-- Optional browser Cantonese dictation and narrow text extraction for product hints and jar quantities, with a manual fallback.
-- Named product verification. Missing facts, estimates, invalid dates and incomplete delivery terms block matching.
-- Eight explicit buyer checks: verified facts, outreach permission, category, quantity, budget, shelf life on arrival, delivery and storage.
-- Human review gates copying, downloading and WhatsApp handoff. Changes to product or buyer records invalidate the previous draft snapshot. Editing a message clears its approval.
-- Browser persistence, manual contact and follow-up states, CSV activity/audit export, JSON backup and reset.
-- Demo interaction timing, without presenting it as proven staff time saved.
+**Products** shows the shared stock records. Complete missing facts and verify the batch against its source. Verification automatically applies eight customer-fit rules and creates personalised bilingual template messages. **Customers** holds purchasing requirements. **WhatsApp messages** shows live conversations, automatic offers and actual provider statuses. **Reviewed offers** retains the manual offer-review workflow.
 
-## Honest boundaries
+The first pilot uses a small shared workspace document in D1. Updates merge independent record changes and reject conflicting edits to the same record. This keeps the demo understandable without silently overwriting another browser or bot update. It is not a multi-tenant production ERP, and matching does not reserve stock.
 
-This is a **single-browser prototype**, not an operational inventory or CRM system. It has no shared database, staff authentication, live ERP integration, stock reservation, automatic sending or photo OCR. Named reviewers represent a workflow convention, not authenticated roles. Drafts use deterministic bilingual templates; **no live language model is connected**. Optional dictation uses the browser's speech service, which may process audio externally; typing needs no speech service.
+## WhatsApp demo
 
-All seeded products, stock, prices, product illustrations, customer names and permissions are fictional and do not represent verified FarmShare records. Existing ERP/spreadsheet records remain the operational source of truth. The UI does not claim to verify food safety, environmental impact or commercial success. Buyers are checked independently, so several offers can refer to the same unreserved stock; recheck availability before an actual order.
+1. Create/join the Twilio WhatsApp test environment using your own phone.
+2. In **WhatsApp messages → WhatsApp connection**, enter the Account SID, Auth Token and test sender number. Tokens are encrypted server-side and never returned to the browser.
+3. Set Twilio's **Custom** incoming-message webhook to the URL shown in the connection dialog, using **HTTP POST**.
+4. Send **JOIN b1** from your phone to try the fictional Harbour Pantry customer profile.
+5. Send **OFFERS** for a promotion generated from the latest verified stock. Send **ZH** or **EN** to switch language.
+6. Send **START** to opt in. Add and verify a fresh matching batch in the app; LoCoMatch can send an update automatically during the active WhatsApp 24-hour reply window. **STOP** takes effect immediately.
+7. Send **JOIN worker**, then a text note such as `Orange marmalade 40 jars. Best before 2027-05-01.` to submit an unverified stock update from WhatsApp.
 
-Use fictional data for the demo. A real deployment needs staff identity, shared durable storage, access controls, real source verification, privacy/authorisation review, retention rules and operational ownership. This prototype does not establish legal compliance.
+The labelled web simulator uses the same database and rules but never sends a WhatsApp message or changes a real customer's subscription. WhatsApp voice/photo messages are not transcribed by the bot; use the web capture page for these inputs.
 
-## Design choices
+## Hosting and access
 
-The brief led to a product workbench rather than a generic AI chat box: one primary next action, familiar jars and buyers, plain labels, visible missing information and explainable checks. The leaf-green palette and citrus illustrations refer to the actual product category. No fabricated KPI improvements, arbitrary AI scores, decorative gradients or automatic messages. Keyboard focus, native dialogs, connected form labels, reduced-motion support and mobile layouts are included.
+The existing Site is upgraded to a Cloudflare Worker with a D1 binding. Schema-only migrations are generated into `drizzle/`. The public WhatsApp endpoints verify Twilio's signature, account and recipient; staff pages and APIs require the configured owner's Sites sign-in. Making the hosting audience public requires the user's explicit approval and does not make the staff database public.
 
-Google Fonts improve the appearance when online; system font fallbacks preserve the workflow offline. Product illustrations are local SVG; the app needs no external image service. Initial page assets must have been loaded before using it offline; this is not an installable offline PWA.
+Hosted settings are configured through Sites environment secrets:
 
-## Files
+- `OWNER_USER_ID`: the existing Site owner's scoped identity.
+- `PUBLIC_ORIGIN`: the exact deployed Site origin used for webhook signatures.
+- `SECRET_ENCRYPTION_KEY`: a 32-byte base64 AES-GCM key, held outside source.
+- `SERVICE_SECRET`: scoped server-to-server verification access, kept outside source.
+- Optional `DEMO_TWILIO_ACCOUNT_SID` / `DEMO_TWILIO_WHATSAPP_FROM`: prefill setup without storing an Auth Token in the client.
 
-- `dist/app.js`: UI, state, forms, verification and approval workflow.
-- `dist/domain.js`: pure matching, validation, message templates, dates and CSV handling.
-- `dist/styles.css`: responsive visual system.
-- `tests/domain.test.mjs`: business-rule and import/export tests.
-- `docs/DECISIONS.md`: source requirements, scope decisions and skill provenance.
-- `docs/PILOT.md`: presentation notes and proposed pilot measurement.
+Never commit credentials or publish the local SQLite database. The app has no browser secret-readback endpoint. Unknown delivery outcomes are labelled **uncertain** and are not blindly retried. Successful API acceptance is not labelled as delivery; signed status callbacks record later delivery states.
 
-## Next integration
+## Scope and limits
 
-Keep deterministic matching and verification on the server. Add a server-side drafting provider that receives only approved facts and buyer needs, returns a draft, and cannot send messages. Keep the current templates as a fallback. Add OCR and Cantonese transcription behind explicit staff review only after comparing their full correction/verification time against ordinary forms.
+All seeded products, prices, stock, customer names and authorisation flags are fictional. Customer `JOIN b1` and `JOIN worker` are explicitly classroom-demo enrollment commands, not production authentication. A real deployment needs staff roles, per-customer enrollment, retention rules, operational ownership and compliance review. The first presentation should use sample data only.
+
+Promotions use deterministic templates grounded in verified facts. No live language model is connected. Food safety, environmental impact, demand, staff time savings and sales results are not independently verified. Outside an active WhatsApp reply window, approved WhatsApp message templates would be needed; this MVP holds the offer rather than attempting an unauthorised free-form send.
+
+See [docs/PILOT.md](docs/PILOT.md), [docs/DECISIONS.md](docs/DECISIONS.md), and [docs/VALIDATION.md](docs/VALIDATION.md).
