@@ -1,30 +1,33 @@
-# Tomorrow's presentation and pilot
+# A five-minute demonstration
 
-## Opening (20 seconds)
+## The problem
 
-“FarmShare's small sales team needs to turn changing product information into relevant B2B offers. LoCoMatch connects four steps: capture, verify, match and review. The facts are checked before a message can be shared.”
+A small sales team needs accurate stock information before contacting the right customers. Production staff should be able to give an update without navigating a complex ERP form.
 
-## Live demonstration (2–3 minutes)
+## Before the presentation
 
-1. Point out that this workspace uses fictional records. Roselle jam has no approved price: it cannot pass verification. Add a sample price, then verify as the reviewer.
-2. Match Orange marmalade. Show Harbour Pantry's eight checks. The offer fits its 36-jar requirement and budget. Show why Island Grocer is excluded (HK$32 budget versus HK$38 price) and Civic Gift Studio is excluded (240 jars required versus 120 available).
-3. Prepare a draft. Choose English or Traditional Chinese. Edit it and show that approval is cleared. Complete the review checklist. Only now do copy/download controls become usable. WhatsApp is an optional manual handoff, not a connected sending API.
-4. Save a manual follow-up. Show the audit trail and reset controls.
+- Keep the hosted Site signed in as its owner.
+- Join the Twilio WhatsApp test number on the phone you will use in class.
+- Send `JOIN b1`, `EN` or `ZH`, then `START` shortly before the demonstration so the reply window is active.
+- Keep a clear printed production sheet or the supplied sample image ready. Test photo OCR once on the presentation browser so its models are cached.
+- Keep ordinary text input ready if the browser does not support Cantonese dictation or microphone permission.
 
-## Be explicit about what is running
+## Show the workflow
 
-The prototype's matching is deterministic. Drafting uses editable templates, not a live LLM. There is no AI confidence score. Browser dictation is optional and may not support Cantonese on every device. OCR and ERP sync are future work. Do not tell the audience that the app sent a message, reserved stock or generated real sales results.
+1. Open **Add stock**. Point out the three large choices. Speak a Cantonese note or scan the sheet. Text can be corrected before it becomes data.
+2. Check a 40-jar marmalade update and save it. Explain that it is now visible in the shared database, but remains unverified.
+3. On the phone, send `OFFERS`. The bot uses the latest verified stock and ignores the new unverified update.
+4. In **Products**, review the new batch. Supply/check expiry, price, physical stock, storage and delivery, then verify with a reviewer name.
+5. The 40-jar batch matches Harbour Pantry (36 jars) and Neighbourhood Café (24 jars). It does not match larger orders. Offers are automatically prepared. A subscribed phone in its active reply window can receive an automatic update.
+6. Show **WhatsApp messages**: incoming messages, prepared promotions, and provider acceptance/delivery statuses. Do not describe acceptance as delivery unless a callback or the phone confirms it.
+7. Send `STOP`, then demonstrate that updates are paused. For producer entry, switch to `JOIN worker` and send a text stock note; it is saved for staff review.
 
-The UI works without an API key and needs no installation beyond Node to run locally. Keep the local preview ready as a backup to the private hosted site. Download a reviewed sample offer before presenting in case venue connectivity fails.
+## Explain the technology plainly
 
-## Pilot success measure
+“The photo is read in this browser. Speech uses the browser's service. A shared database keeps the latest stock. Clear rules check customer fit before a template writes the offer. WhatsApp sends real messages only after a verified match and customer opt-in.”
 
-One product category, roughly ten authorised buyers and one reviewer. Before use, measure staff time for equivalent offers using the existing spreadsheet workflow. Include entry, corrections, source checking, matching, writing and final approval. Compare total time and errors, not just drafting speed.
+The simulator is explicitly labelled and sends no real messages. There is no live OpenAI model or API key. WhatsApp voice/image files are not processed by the bot itself in this MVP; voice/photo capture is on the web page.
 
-The app records start-to-first-approval interaction time for demo offers. This is not evidence of net staff savings, and browser pauses can increase it. Use observation and a consistent timing protocol during the real pilot.
+## What remains to validate
 
-Other measures: percentage of matches satisfying all rules, correction count, staff task completion and qualitative usability feedback. Replies or trial orders may be observed later; recurring contracts are an aspiration rather than a guaranteed outcome.
-
-## Before real data
-
-Assign an operational owner; implement authenticated staff access, shared storage, appropriate retention, permission/opt-out records and audit protection. Confirm product and delivery details against FarmShare's records. Test whether Cantonese speech/OCR reduce total effort including corrections. Keep simpler forms/templates if they perform better.
+Test the flow with FarmShare staff instead of assuming ease of use from age. Observe task completion, transcription/OCR corrections, verification effort and total staff time per accurate offer. Compare against the current spreadsheet workflow. Measure accuracy and time, not only drafting speed. Do not claim recurring sales or verified time savings from the classroom demo.

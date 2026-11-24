@@ -1,3 +1,4 @@
+import { capturePage, botPage, bindEasy } from "./easy.js";
 import {
   today,
   addDays,
@@ -8,31 +9,13 @@ import {
   parseCSV,
   csvCell,
 } from "./domain.js";
-const KEY = "locomatch.v1";
+let state = seedState();
 let storageOK = true,
-  state;
-try {
-  const saved = localStorage.getItem(KEY);
-  state = saved ? JSON.parse(saved) : seedState();
-  if (
-    state.version !== 1 ||
-    !Array.isArray(state.products) ||
-    !Array.isArray(state.buyers) ||
-    !Array.isArray(state.drafts) ||
-    !Array.isArray(state.audit) ||
-    !Array.isArray(state.runs)
-  )
-    throw Error("Invalid data");
-} catch {
-  state = seedState();
-}
-let lang = "en";
+  lang = "en";
 try {
   lang = localStorage.getItem("locomatch.lang") === "zh" ? "zh" : "en";
-} catch {
-  storageOK = false;
-}
-let page = "workspace",
+} catch {}
+let page = "capture",
   stage = "board",
   selected = "p1",
   buyerId = "b1",
@@ -41,6 +24,16 @@ let page = "workspace",
   filter = "all",
   started = null,
   showExcluded = false;
+let loaded = false,
+  initialised = false,
+  bootError = "",
+  baseState = null,
+  revision = 0,
+  dirty = false,
+  changeNumber = 0,
+  savePromise = null,
+  saveTimer = null,
+  syncStatus = "Loading…";
 const $ = (s) => document.querySelector(s),
   t = (en, zh) => (lang === "zh" ? zh : en),
   esc = (v) =>
@@ -81,18 +74,114 @@ function jar(p, large = false) {
   }[p.accent] || ["#e9a33a", "#f9d89a", "#d36d22"];
   return `<svg class="product-art ${large ? "large" : ""}" viewBox="0 0 160 180" role="img" aria-label="${esc(name(p))} ${t("illustration", "插圖")}"><ellipse cx="80" cy="166" rx="45" ry="7" fill="${a[0]}" opacity=".14"/><rect x="42" y="28" width="76" height="17" rx="5" fill="#324b3c"/><path d="M47 46h66l6 15v86c0 9-8 15-17 15H58c-10 0-17-6-17-15V61z" fill="${a[0]}"/><path d="M48 64v78" stroke="${a[1]}" stroke-width="4" opacity=".7" stroke-linecap="round"/><rect x="40" y="79" width="80" height="59" rx="2" fill="#fffdf4"/><text x="80" y="93" text-anchor="middle" font-family="Georgia,serif" font-size="8" fill="#34543c">LoCoFARMS</text><circle cx="80" cy="111" r="11" fill="${a[0]}"/><path d="M79 100q4-8 11-5-2 7-11 5" fill="#426b42"/><path d="M73 111h14M80 104v14" stroke="${a[2]}" stroke-width="1"/><text x="80" y="131" text-anchor="middle" font-family="Arial,sans-serif" font-size="5.5" fill="#34543c">LOCAL PRODUCE · DEMO</text></svg>`;
 }
-function persist() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {
-    storageOK = false;
-    toast(
-      t(
-        "Browser storage is full or unavailable. Export a backup before leaving.",
-        "瀏覽器儲存空間不足或無法使用。離開前請匯出備份。",
-      ),
-    );
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options.headers },
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.error || "The update could not be saved.");
+  return result;
+}
+function setSyncStatus(value) {
+  syncStatus = value;
+  const el = $("#database-state");
+  if (el) el.textContent = value;
+}
+function acceptSnapshot(snapshot) {
+  if (snapshot.state) {
+    state = snapshot.state;
+    baseState = structuredClone(state);
+    initialised = true;
+    revision = snapshot.revision;
   }
+}
+function persist() {
+  if (!initialised) return;
+  dirty = true;
+  changeNumber++;
+  setSyncStatus(t("Saving online…", "正在儲存…"));
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => flushChanges().catch(() => {}), 400);
+}
+async function flushChanges() {
+  clearTimeout(saveTimer);
+  if (savePromise) {
+    await savePromise;
+    if (dirty) return flushChanges();
+    return;
+  }
+  if (!dirty || !initialised) return;
+  const version = changeNumber,
+    payload = structuredClone(state),
+    base = structuredClone(baseState);
+  savePromise = (async () => {
+    try {
+      const result = await api("/api/workspace", {
+        method: "PUT",
+        body: JSON.stringify({ revision, state: payload, base }),
+      });
+      revision = result.revision;
+      baseState = structuredClone(result.state);
+      if (version === changeNumber) {
+        state = result.state;
+        dirty = false;
+      } else state.bot = result.state.bot;
+      setSyncStatus(
+        dirty ? t("Saving online…", "正在儲存…") : t("Saved online", "已儲存"),
+      );
+    } catch (error) {
+      setSyncStatus(
+        t(
+          "Not saved. Refresh or export your changes.",
+          "尚未儲存，請重新整理或匯出更改。",
+        ),
+      );
+      toast(error.message);
+      throw error;
+    } finally {
+      savePromise = null;
+    }
+  })();
+  await savePromise;
+  if (dirty) return flushChanges();
+}
+async function refreshWorkspace() {
+  await flushChanges();
+  const result = await api("/api/workspace");
+  acceptSnapshot(result);
+  setSyncStatus(t("Saved online", "已儲存"));
+  render();
+}
+function easyContext() {
+  return {
+    state,
+    t,
+    esc,
+    icon,
+    name,
+    button,
+    api,
+    render,
+    toast,
+    showDialog,
+    flush: flushChanges,
+    refresh: refreshWorkspace,
+    acceptSnapshot,
+    navigate: (target) => {
+      page = target;
+      stage = "board";
+      render();
+      focusMain();
+    },
+    review: (id) => act("verify", { id }),
+    addProduct: async (p) => {
+      state.products.push(p);
+      log("Worker stock update", p.name + " / " + p.quantity + " jars");
+      await flushChanges();
+    },
+  };
 }
 function log(action, detail) {
   state.audit.unshift({
@@ -123,22 +212,33 @@ function shell() {
     (p) => p.status !== "verified" || productIssues(p).length,
   ).length;
   const nav = [
-    ["workspace", "grid", t("Workspace", "工作台")],
-    ["products", "jar", t("Product records", "產品記錄")],
-    ["buyers", "users", t("Buyer directory", "買家名錄")],
-    ["outreach", "mail", t("Outreach", "客戶聯絡")],
+    ["capture", "mic", t("Add stock", "新增庫存")],
+    ["workspace", "grid", t("Sales workspace", "銷售工作台")],
+    ["products", "jar", t("Products", "產品")],
+    ["buyers", "users", t("Customers", "客戶")],
+    ["messages", "mail", t("WhatsApp messages", "WhatsApp訊息")],
+    ["outreach", "file", t("Reviewed offers", "已審閱建議")],
   ];
-  return `<aside class="sidebar"><a class="brand" href="#" data-nav="workspace"><img src="./mark.svg" alt="" width="39" height="39"><span>LoCoMatch<small>${t("Made for FarmShare", "為 FarmShare 而設")}</small></span></a><div class="workspace-label">${t("Your workbench", "你的工作台")}</div><nav aria-label="${t("Main navigation", "主選單")}">${nav.map(([id, ic, label]) => `<button class="nav-item ${page === id ? "active" : ""}" data-nav="${id}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "products" && pending ? `<span class="nav-count">${pending}</span>` : ""}${id === "outreach" && state.drafts.length ? `<span class="nav-count">${state.drafts.length}</span>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><button class="nav-item ${page === "guide" ? "active" : ""}" data-nav="guide">${icon("book")}<span>${t("Demo & pilot guide", "示範及試行指南")}</span></button><div class="partner"><div class="partner-icon">${icon("leaf", 23)}</div><div>FarmShare<small>CCAI9022 · ${t("Group 3", "第3組")}</small></div></div></div></aside><div class="app-body"><header class="topbar"><span>${t("FarmShare outreach workspace", "FarmShare 客戶聯絡工作台")}</span><div class="top-actions"><span class="demo-label">${t("Demo data", "示範資料")}</span><button class="lang-btn" data-action="language" aria-label="${t("Switch to Traditional Chinese", "切換至英文")}">${lang === "en" ? "繁體中文" : "English"}</button><span class="avatar" title="${t("Demo workspace, no sign-in", "示範工作台，無需登入")}">FS</span></div></header><main id="main" tabindex="-1">${!storageOK ? `<div class="notice amber">${t("Local saving is unavailable. Download a backup before leaving.", "無法在本機儲存，離開前請下載備份。")}</div>` : ""}${renderPage()}</main><footer>${icon("shield", 14)}<span>${t("Fictional products and buyers. Your changes stay in this browser.", "產品及買家均為虛構。更改只儲存在此瀏覽器。")}</span><button data-nav="guide">${t("About this prototype", "關於此原型")}</button></footer></div>`;
+  return `<aside class="sidebar"><a class="brand" href="#" data-nav="capture"><img src="./mark.svg" alt="" width="39" height="39"><span>LoCoMatch<small>${t("Made for FarmShare", "為 FarmShare 而設")}</small></span></a><div class="workspace-label">${t("Your workbench", "你的工作台")}</div><nav aria-label="${t("Main navigation", "主選單")}">${nav.map(([id, ic, label]) => `<button class="nav-item ${page === id ? "active" : ""}" data-nav="${id}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "products" && pending ? `<span class="nav-count">${pending}</span>` : ""}${id === "outreach" && state.drafts.length ? `<span class="nav-count">${state.drafts.length}</span>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><button class="nav-item ${page === "guide" ? "active" : ""}" data-nav="guide">${icon("book")}<span>${t("Demo & pilot guide", "示範及試行指南")}</span></button><div class="partner"><div class="partner-icon">${icon("leaf", 23)}</div><div>FarmShare<small>CCAI9022 · ${t("Group 3", "第3組")}</small></div></div></div></aside><div class="app-body"><header class="topbar"><span>${t("FarmShare outreach workspace", "FarmShare 客戶聯絡工作台")}</span><div class="top-actions"><span class="database-status" id="database-state">${esc(syncStatus)}</span><span class="demo-label">${t("Demo data", "示範資料")}</span><button class="lang-btn" data-action="language" aria-label="${t("Switch to Traditional Chinese", "切換至英文")}">${lang === "en" ? "繁體中文" : "English"}</button><span class="avatar" title="${t("Demo workspace, no sign-in", "示範工作台，無需登入")}">FS</span></div></header><main id="main" tabindex="-1">${!storageOK ? `<div class="notice amber">${t("Local saving is unavailable. Download a backup before leaving.", "無法在本機儲存，離開前請下載備份。")}</div>` : ""}${renderPage()}</main><footer>${icon("shield", 14)}<span>${t("Fictional products and customers. Records are saved in the shared database.", "產品及客戶均為虛構，記錄儲存至共用資料庫。")}</span><button data-nav="guide">${t("About this prototype", "關於此原型")}</button></footer></div>`;
 }
 function render() {
   document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en-HK";
   $("#app").innerHTML = shell();
   bind();
+  bindEasy(easyContext());
 }
 function heading(title, desc, actions = "") {
   return `<div class="page-heading"><div><h1>${title}</h1><p>${desc}</p></div>${actions ? `<div class="heading-actions">${actions}</div>` : ""}</div>`;
 }
 function renderPage() {
+  if (!loaded)
+    return `<section class="panel"><h1>${t("Opening your workspace…", "開啟工作台中…")}</h1></section>`;
+  if (bootError)
+    return `<section class="panel"><h1>${t("The workspace could not open.", "未能開啟工作台。")}</h1><p>${esc(bootError)}</p><a class="btn primary" href="/signin-with-chatgpt?returnTo=%2F" target="_top">${t("Sign in to staff workspace", "登入職員工作台")}</a><button class="btn secondary" data-action="reload-database">${t("Try again", "再試一次")}</button></section>`;
+  if (!initialised)
+    return `<section class="panel demo-start"><img src="./mark.svg" width="60" height="60" alt=""><h1>${t("Welcome to LoCoMatch", "歡迎使用LoCoMatch")}</h1><p>${t("Start a shared demo with sample products and customers. Nothing is sent to WhatsApp until the connection and customer opt-in are set up.", "開始共用示範，使用範例產品及客戶。設定WhatsApp連線及客戶訂閱前，不會發送訊息。")}</p><button class="btn primary" data-action="initialise">${t("Start demo workspace", "開始示範工作台")}</button></section>`;
+  if (page === "capture") return capturePage(easyContext());
+  if (page === "messages") return botPage(easyContext());
   if (page === "workspace") return stage === "board" ? board() : workflow();
   if (page === "products") return productsPage();
   if (page === "buyers") return buyersPage();
@@ -271,7 +371,7 @@ function draftPage() {
   const p = state.products.find((p) => p.id === d.productId),
     b = state.buyers.find((b) => b.id === d.buyerId);
   const valid = draftIsCurrent(d);
-  return `<div class="draft-layout"><section class="panel draft-editor"><div class="section-head"><div><span class="section-tag">${t("Offer draft", "供應建議草稿")}</span><h2>${esc(name(b))}</h2></div><span id="approval-status" class="badge ${d.approved && valid ? "green" : "amber"}">${t(d.approved && valid ? "Reviewed" : "Needs review", d.approved && valid ? "已審閱" : "待審閱")}</span></div><div class="draft-controls"><label class="field"><span>${t("Format", "格式")}</span><select id="draft-channel"><option value="email" ${d.channel === "email" ? "selected" : ""}>Email</option><option value="whatsapp" ${d.channel === "whatsapp" ? "selected" : ""}>WhatsApp</option></select></label><label class="field"><span>${t("Message language", "訊息語言")}</span><select id="draft-language"><option value="en" ${d.language === "en" ? "selected" : ""}>English</option><option value="zh" ${d.language === "zh" ? "selected" : ""}>繁體中文</option></select></label></div><div class="template-note">${icon("file", 16)}${t("Built from verified facts using a reusable template.", "使用範本，根據已核實資料草擬。")}</div>${!valid ? `<div class="notice amber" role="alert">${t("The product or buyer record changed. Recheck the match and prepare a fresh draft.", "產品或買家資料已更改。請重新配對及建立草稿。")}${button("select-match", t("Recheck match", "重新配對"), "secondary", `data-id="${d.productId}"`)}</div>` : ""}<label class="field"><span class="sr-only">${t("Edit offer message", "編輯建議訊息")}</span><textarea id="message-editor" rows="19" ${valid ? "" : "disabled"}>${esc(d.message)}</textarea></label><div class="editor-footer"><span id="save-status" role="status" aria-live="polite">${t("Saved in this browser", "已儲存在此瀏覽器")}</span><span>${t("Editing clears approval.", "編輯後須重新審閱。")}</span></div></section><aside><section class="panel offer-facts"><h2>${t("Facts behind this offer", "這份建議的資料依據")}</h2><div class="offer-product">${jar(p)}<div><strong>${esc(name(p))}</strong><small>${d.quantity} ${t("jars", "罐")}<span class="separator">/</span>${money(p.price)} ${t("each", "每罐")}</small></div></div><dl><div><dt>${t("Product subtotal", "產品金額")}</dt><dd>${money(d.quantity * p.price)}</dd></div><div><dt>${t("Best before", "最佳食用日期")}</dt><dd>${p.expiry}</dd></div><div><dt>${t("Source", "來源")}</dt><dd>${esc(p.source)}</dd></div></dl><p class="muted">${t("No environmental, food-safety or sales claims are added.", "不會加入未經核實的環境、食安或銷售聲明。")}</p></section><section class="panel approval-panel"><h2>${t("Your review comes last", "最後由你審閱")}</h2><p>${t("Check the edited message against these facts before sharing.", "分享前，請將編輯後的訊息與這些資料核對。")}</p><form id="approve-form"><label class="field"><span>${t("Sales reviewer", "銷售審閱者")}</span><input name="reviewer" required maxlength="80" value="${esc(d.approvedBy || "")}" placeholder="${t("Your name", "你的姓名")}"></label><div class="checklist">${[t("Buyer and outreach permission checked", "已核對買家及聯絡授權"), t("Stock, price and dates are accurate", "庫存、價格及日期準確"), t("Delivery terms and wording checked", "已核對配送條件及內容")].map((label, i) => `<label class="checkbox-row"><input name="check${i}" type="checkbox" required ${d.approved && valid ? "checked" : ""}><span>${label}</span></label>`).join("")}</div><button class="btn primary full" type="submit" ${!valid ? "disabled" : ""}>${icon("check", 18)}${t(d.approved ? "Approve again" : "Approve message", d.approved ? "再次批准" : "批准訊息")}</button></form><div class="export-actions">${button("copy", t("Copy message", "複製訊息"), "secondary", d.approved && valid ? "" : "disabled")}${button("download-offer", icon("download", 16) + t("Download", "下載"), "secondary", d.approved && valid ? "" : "disabled")}${d.channel === "whatsapp" ? button("whatsapp", t("Open WhatsApp", "開啟 WhatsApp"), "secondary full", d.approved && valid ? "" : "disabled") : ""}</div><p class="footnote">${t("Nothing is sent automatically. Opening WhatsApp lets you choose a recipient and send there.", "不會自動發送訊息。開啟 WhatsApp 後，由你選擇收件者並發送。")}</p>${d.approved && valid ? button("contacted", t("Record contact / follow-up", "記錄聯絡及跟進"), "quiet full", `data-id="${d.id}"`) : ""}</section></aside></div>`;
+  return `<div class="draft-layout"><section class="panel draft-editor"><div class="section-head"><div><span class="section-tag">${t("Offer draft", "供應建議草稿")}</span><h2>${esc(name(b))}</h2></div><span id="approval-status" class="badge ${d.approved && valid ? "green" : "amber"}">${t(d.approved && valid ? "Reviewed" : "Needs review", d.approved && valid ? "已審閱" : "待審閱")}</span></div><div class="draft-controls"><label class="field"><span>${t("Format", "格式")}</span><select id="draft-channel"><option value="email" ${d.channel === "email" ? "selected" : ""}>Email</option><option value="whatsapp" ${d.channel === "whatsapp" ? "selected" : ""}>WhatsApp</option></select></label><label class="field"><span>${t("Message language", "訊息語言")}</span><select id="draft-language"><option value="en" ${d.language === "en" ? "selected" : ""}>English</option><option value="zh" ${d.language === "zh" ? "selected" : ""}>繁體中文</option></select></label></div><div class="template-note">${icon("file", 16)}${t("Built from verified facts using a reusable template.", "使用範本，根據已核實資料草擬。")}</div>${!valid ? `<div class="notice amber" role="alert">${t("The product or buyer record changed. Recheck the match and prepare a fresh draft.", "產品或買家資料已更改。請重新配對及建立草稿。")}${button("select-match", t("Recheck match", "重新配對"), "secondary", `data-id="${d.productId}"`)}</div>` : ""}<label class="field"><span class="sr-only">${t("Edit offer message", "編輯建議訊息")}</span><textarea id="message-editor" rows="19" ${valid ? "" : "disabled"}>${esc(d.message)}</textarea></label><div class="editor-footer"><span id="save-status" role="status" aria-live="polite">${t("Saved in the shared database", "已儲存至共用資料庫")}</span><span>${t("Editing clears approval.", "編輯後須重新審閱。")}</span></div></section><aside><section class="panel offer-facts"><h2>${t("Facts behind this offer", "這份建議的資料依據")}</h2><div class="offer-product">${jar(p)}<div><strong>${esc(name(p))}</strong><small>${d.quantity} ${t("jars", "罐")}<span class="separator">/</span>${money(p.price)} ${t("each", "每罐")}</small></div></div><dl><div><dt>${t("Product subtotal", "產品金額")}</dt><dd>${money(d.quantity * p.price)}</dd></div><div><dt>${t("Best before", "最佳食用日期")}</dt><dd>${p.expiry}</dd></div><div><dt>${t("Source", "來源")}</dt><dd>${esc(p.source)}</dd></div></dl><p class="muted">${t("No environmental, food-safety or sales claims are added.", "不會加入未經核實的環境、食安或銷售聲明。")}</p></section><section class="panel approval-panel"><h2>${t("Your review comes last", "最後由你審閱")}</h2><p>${t("Check the edited message against these facts before sharing.", "分享前，請將編輯後的訊息與這些資料核對。")}</p><form id="approve-form"><label class="field"><span>${t("Sales reviewer", "銷售審閱者")}</span><input name="reviewer" required maxlength="80" value="${esc(d.approvedBy || "")}" placeholder="${t("Your name", "你的姓名")}"></label><div class="checklist">${[t("Buyer and outreach permission checked", "已核對買家及聯絡授權"), t("Stock, price and dates are accurate", "庫存、價格及日期準確"), t("Delivery terms and wording checked", "已核對配送條件及內容")].map((label, i) => `<label class="checkbox-row"><input name="check${i}" type="checkbox" required ${d.approved && valid ? "checked" : ""}><span>${label}</span></label>`).join("")}</div><button class="btn primary full" type="submit" ${!valid ? "disabled" : ""}>${icon("check", 18)}${t(d.approved ? "Approve again" : "Approve message", d.approved ? "再次批准" : "批准訊息")}</button></form><div class="export-actions">${button("copy", t("Copy message", "複製訊息"), "secondary", d.approved && valid ? "" : "disabled")}${button("download-offer", icon("download", 16) + t("Download", "下載"), "secondary", d.approved && valid ? "" : "disabled")}${d.channel === "whatsapp" ? button("whatsapp", t("Open WhatsApp", "開啟 WhatsApp"), "secondary full", d.approved && valid ? "" : "disabled") : ""}</div><p class="footnote">${t("Nothing is sent automatically. Opening WhatsApp lets you choose a recipient and send there.", "不會自動發送訊息。開啟 WhatsApp 後，由你選擇收件者並發送。")}</p>${d.approved && valid ? button("contacted", t("Record contact / follow-up", "記錄聯絡及跟進"), "quiet full", `data-id="${d.id}"`) : ""}</section></aside></div>`;
 }
 function productsPage() {
   const list = state.products.filter(
@@ -282,10 +382,10 @@ function productsPage() {
           : p.status !== "verified" || productIssues(p).length)) &&
       `${p.name} ${p.nameZh}`.toLowerCase().includes(search.toLowerCase()),
   );
-  return `${heading(t("Product records", "產品記錄"), t("A small, reliable set of facts for outreach.", "一組精簡可靠的資料，支援客戶聯絡。"), button("import", icon("download", 18) + t("Import CSV", "匯入CSV"), "secondary") + button("capture", icon("plus", 18) + t("Add update", "新增更新"), "primary"))}<div class="toolbar"><label class="search-box">${icon("search", 19)}<input id="product-search" type="search" aria-label="${t("Search products", "搜尋產品")}" placeholder="${t("Search product records", "搜尋產品記錄")}" value="${esc(search)}"></label><label class="field inline-field"><span class="sr-only">${t("Record status", "記錄狀態")}</span><select id="product-filter"><option value="all" ${filter === "all" ? "selected" : ""}>${t("All records", "所有記錄")}</option><option value="verified" ${filter === "verified" ? "selected" : ""}>${t("Verified", "已核實")}</option><option value="pending" ${filter === "pending" ? "selected" : ""}>${t("Needs review", "待核實")}</option></select></label>${button("sample-csv", t("CSV template", "CSV範本"), "quiet")}</div><div class="table-wrap"><table><thead><tr>${[t("Product", "產品"), t("Stock / price", "庫存／價格"), t("Best before", "最佳食用日期"), t("Status", "狀態"), t("Next action", "下一步")].map((v) => `<th scope="col">${v}</th>`).join("")}</tr></thead><tbody>${list.map((p) => `<tr><td><div class="table-product"><span class="mini-product ${p.accent}">${icon("jar", 23)}</span><div><strong>${esc(name(p))}</strong><small>${esc(p.source)}</small></div></div></td><td><strong>${p.quantity} ${t("jars", "罐")}</strong><small>${p.price ? money(p.price) : t("Price missing", "尚欠價格")}</small></td><td>${esc(p.expiry) || "—"}<small>${p.storage === "Chilled" ? t("Chilled", "冷藏") : t("Ambient", "室溫")}</small></td><td>${status(p)}</td><td>${button(p.status === "verified" && !productIssues(p).length ? "select-match" : "verify", p.status === "verified" && !productIssues(p).length ? t("Match buyers", "配對買家") : t("Review record", "核實記錄"), "secondary", `data-id="${p.id}"`)}</td></tr>`).join("") || `<tr><td colspan="5"><div class="empty"><h3>${t("No products found", "找不到產品")}</h3><p>${t("Try another search or add a product update.", "請嘗試其他搜尋字詞，或新增產品更新。")}</p></div></td></tr>`}</tbody></table></div><div class="notice neutral">${icon("info", 19)}${t("Imports and edits always require fresh staff verification. Existing ERP records remain your source of truth.", "所有匯入及修改均須重新核實。現有ERP記錄仍是資料依據。")}</div>`;
+  return `${heading(t("Product records", "產品記錄"), t("Shared stock records, with clear facts for customer offers.", "共用庫存記錄，以清晰資料支援客戶供應建議。"), button("import", icon("download", 18) + t("Import CSV", "匯入CSV"), "secondary") + button("capture", icon("plus", 18) + t("Add update", "新增更新"), "primary"))}<div class="toolbar"><label class="search-box">${icon("search", 19)}<input id="product-search" type="search" aria-label="${t("Search products", "搜尋產品")}" placeholder="${t("Search product records", "搜尋產品記錄")}" value="${esc(search)}"></label><label class="field inline-field"><span class="sr-only">${t("Record status", "記錄狀態")}</span><select id="product-filter"><option value="all" ${filter === "all" ? "selected" : ""}>${t("All records", "所有記錄")}</option><option value="verified" ${filter === "verified" ? "selected" : ""}>${t("Verified", "已核實")}</option><option value="pending" ${filter === "pending" ? "selected" : ""}>${t("Needs review", "待核實")}</option></select></label>${button("sample-csv", t("CSV template", "CSV範本"), "quiet")}</div><div class="table-wrap"><table><thead><tr>${[t("Product", "產品"), t("Stock / price", "庫存／價格"), t("Best before", "最佳食用日期"), t("Status", "狀態"), t("Next action", "下一步")].map((v) => `<th scope="col">${v}</th>`).join("")}</tr></thead><tbody>${list.map((p) => `<tr><td><div class="table-product"><span class="mini-product ${p.accent}">${icon("jar", 23)}</span><div><strong>${esc(name(p))}</strong><small>${esc(p.source)}</small></div></div></td><td><strong>${p.quantity} ${t("jars", "罐")}</strong><small>${p.price ? money(p.price) : t("Price missing", "尚欠價格")}</small></td><td>${esc(p.expiry) || "—"}<small>${p.storage === "Chilled" ? t("Chilled", "冷藏") : t("Ambient", "室溫")}</small></td><td>${status(p)}</td><td>${button(p.status === "verified" && !productIssues(p).length ? "select-match" : "verify", p.status === "verified" && !productIssues(p).length ? t("Match buyers", "配對買家") : t("Review record", "核實記錄"), "secondary", `data-id="${p.id}"`)}</td></tr>`).join("") || `<tr><td colspan="5"><div class="empty"><h3>${t("No products found", "找不到產品")}</h3><p>${t("Try another search or add a product update.", "請嘗試其他搜尋字詞，或新增產品更新。")}</p></div></td></tr>`}</tbody></table></div><div class="notice neutral">${icon("info", 19)}${t("Imports and edits always require fresh staff verification. Existing ERP records remain your source of truth.", "所有匯入及修改均須重新核實。現有ERP記錄仍是資料依據。")}</div>`;
 }
 function buyersPage() {
-  return `${heading(t("People worth knowing", "值得連繫的買家"), t("Ten fictional profiles to test realistic purchasing requirements.", "十個虛構買家，測試不同的採購要求。"), button("add-buyer", icon("plus", 18) + t("Add buyer", "新增買家"), "primary"))}<div class="notice neutral">${icon("shield", 19)}${t("Only authorised buyers who have not opted out can receive an outreach-ready offer.", "只有已獲授權且未退訂的買家，才可建立供聯絡的建議。")}</div><div class="directory-grid">${state.buyers.map((b, i) => `<article class="panel buyer-profile"><div class="match-card-top"><span class="buyer-avatar tone-${i % 3}">${esc(b.initials)}</span><div><h2>${esc(name(b))}</h2><p>${t(b.type, b.typeZh)}</p></div></div><p>${esc(t(b.notes, b.notesZh))}</p><dl><div><dt>${t("Buys", "採購")}</dt><dd>${b.categories.map((c) => t(c, c === "Sauces" ? "醬料" : "果醬")).join(", ")}</dd></div><div><dt>${t("Usual quantity", "一般數量")}</dt><dd>${b.quantity} ${t("jars", "罐")}</dd></div><div><dt>${t("Budget / jar", "每罐預算")}</dt><dd>${money(b.maxPrice)}</dd></div><div><dt>${t("Delivery area", "配送地區")}</dt><dd>${esc(b.district)}</dd></div><div><dt>${t("Minimum shelf life", "最低保質期")}</dt><dd>${b.minShelfDays} ${t("days", "天")}</dd></div></dl><div class="profile-footer"><span class="badge ${b.authorised && !b.suppressed ? "green" : "amber"}">${b.suppressed ? t("Opted out", "已退訂") : b.authorised ? t("Authorised", "已獲授權") : t("Permission needed", "尚待授權")}</span>${button("edit-buyer", t("Edit profile", "編輯資料"), "quiet", `data-id="${b.id}"`)}</div></article>`).join("")}</div>`;
+  return `${heading(t("People worth knowing", "值得連繫的買家"), t("Customer preferences determine which products are recommended.", "客戶偏好決定推薦哪些產品。"), button("add-buyer", icon("plus", 18) + t("Add buyer", "新增買家"), "primary"))}<div class="notice neutral">${icon("shield", 19)}${t("Only authorised buyers who have not opted out can receive an outreach-ready offer.", "只有已獲授權且未退訂的買家，才可建立供聯絡的建議。")}</div><div class="directory-grid">${state.buyers.map((b, i) => `<article class="panel buyer-profile"><div class="match-card-top"><span class="buyer-avatar tone-${i % 3}">${esc(b.initials)}</span><div><h2>${esc(name(b))}</h2><p>${t(b.type, b.typeZh)}</p></div></div><p>${esc(t(b.notes, b.notesZh))}</p><dl><div><dt>${t("Buys", "採購")}</dt><dd>${b.categories.map((c) => t(c, c === "Sauces" ? "醬料" : "果醬")).join(", ")}</dd></div><div><dt>${t("Usual quantity", "一般數量")}</dt><dd>${b.quantity} ${t("jars", "罐")}</dd></div><div><dt>${t("Budget / jar", "每罐預算")}</dt><dd>${money(b.maxPrice)}</dd></div><div><dt>${t("Delivery area", "配送地區")}</dt><dd>${esc(b.district)}</dd></div><div><dt>${t("Minimum shelf life", "最低保質期")}</dt><dd>${b.minShelfDays} ${t("days", "天")}</dd></div></dl><div class="profile-footer"><span class="badge ${b.authorised && !b.suppressed ? "green" : "amber"}">${b.suppressed ? t("Opted out", "已退訂") : b.authorised ? t("Authorised", "已獲授權") : t("Permission needed", "尚待授權")}</span>${button("edit-buyer", t("Edit profile", "編輯資料"), "quiet", `data-id="${b.id}"`)}</div></article>`).join("")}</div>`;
 }
 function outreachPage() {
   return `${heading(t("Keep the conversation going", "讓對話持續下去"), t("Drafts, reviewed offers and the next follow-up, in one place.", "草稿、已審閱建議及下次跟進，盡在一處。"), button("export-outreach", icon("download", 18) + t("Export activity", "匯出活動"), "secondary"))}${
@@ -305,17 +405,15 @@ function outreachPage() {
   }<div class="notice neutral">${icon("info", 19)}${t("Contact status is recorded manually. It does not confirm that a message was delivered or that an order was placed.", "聯絡狀態由人手記錄，不代表訊息已送達或訂單已成立。")}</div>`;
 }
 function guidePage() {
-  return `${heading(t("A small pilot. A clear test.", "小規模試行，清晰地驗證。"), t("Use this guide for tomorrow’s demonstration and the next real-world pilot.", "用於明天示範，以及下一步的實際試行。"), button("reset", icon("refresh", 17) + t("Reset demo", "重設示範"), "secondary"))}<div class="guide-grid"><section class="panel"><h2>${t("Your three-minute demo", "三分鐘示範流程")}</h2><ol class="demo-script"><li><strong>${t("Start with a real constraint", "由實際限制開始")}</strong><p>${t("Open Roselle jam. Its missing price blocks verification. Complete the price from a sample source and check the record.", "開啟洛神花果醬。尚欠價格會阻止核實。參考示範來源補齊價格，再核實記錄。")}</p></li><li><strong>${t("Explain why a buyer fits", "解釋買家為何合適")}</strong><p>${t("Match Orange marmalade. Open “Why this match?” and show budget, quantity, shelf life and delivery. Compare an excluded buyer.", "配對香橙果醬。開啟「為何配對成功？」展示預算、數量、保質期及配送條件，再比較不合適的買家。")}</p></li><li><strong>${t("Keep the last decision human", "最後決定由人作出")}</strong><p>${t("Prepare an English or Chinese offer. Edit it, complete the review checklist, then copy or download. Record a follow-up.", "準備中英文建議、編輯內容、完成審閱清單，再複製或下載，最後記錄跟進。")}</p></li></ol>${button("board", t("Start from the workspace", "由工作台開始"), "primary")}</section><section class="panel"><h2>${t("What this MVP does", "MVP提供的功能")}</h2><ul class="plain-list"><li>${t("Forms and CSV import with source tracking", "表格、CSV匯入及來源記錄")}</li><li>${t("Named verification and visible missing fields", "具名核實及顯示欠缺資料")}</li><li>${t("Eight transparent matching checks per buyer", "每位買家八項透明配對檢查")}</li><li>${t("Editable English / Traditional Chinese templates", "可編輯的英文及繁體中文範本")}</li><li>${t("Approval-gated export and WhatsApp handoff", "批准後匯出及交接至WhatsApp")}</li><li>${t("Local draft storage, follow-ups and an audit trail", "本機草稿儲存、跟進及操作記錄")}</li></ul><div class="notice amber"><strong>${t("Be precise about the AI", "準確說明AI功能")}</strong><p>${t("Drafts use deterministic templates, not a live language model. Cantonese dictation depends on your browser’s speech service. Photo OCR, live ERP sync and automatic messaging are not implemented.", "草稿使用固定範本，並非即時語言模型。粵語聽寫視乎瀏覽器語音服務支援。尚未實作照片OCR、即時ERP同步或自動發送訊息。")}</p></div></section><section class="panel"><h2>${t("Measure the work, not the promise", "量度實際工作，不靠承諾")}</h2><p>${t("Time from starting a product workflow to first message approval is recorded below. This is demo interaction time, not a validated saving.", "由開啟產品流程至首次批准訊息的時間記錄如下。這是示範操作時間，並非已驗證的節省。")}</p><div class="pilot-stat"><strong>${state.runs.length}</strong><span>${t("completed demo offers", "份完成示範建議")}</span></div>${state.runs.length ? `<ul class="plain-list">${state.runs.map((r) => `<li>${esc(r.product)}: ${Math.round(r.seconds)} ${t("seconds", "秒")}</li>`).join("")}</ul>` : ""}<p class="muted">${t("Before a real pilot, measure the full spreadsheet workflow including capture, corrections, verification and review. Compare accuracy and total staff time on equivalent offers.", "實際試行前，量度整個試算表流程，包括收集、修正、核實及審閱。用相同建議比較準確度及職員總工時。")}</p></section><section class="panel"><h2>${t("Your data and the next step", "資料及下一步")}</h2><p>${t("This is a single-browser demonstration. It has no shared database, staff authentication or stock reservation. Use fictional records until an authorised deployment is ready.", "此示範只在單一瀏覽器運作，沒有共用資料庫、職員登入或庫存預留。正式授權部署前，請使用虛構資料。")}</p><div class="button-row">${button("backup", icon("download", 16) + t("Download backup", "下載備份"), "secondary")}${button("export-audit", t("Export audit trail", "匯出操作記錄"), "secondary")}</div><h3>${t("Suggested pilot scope", "建議試行範圍")}</h3><p>${t("One product category, about ten authorised buyers, one named reviewer. Add real AI drafting and OCR only after the verified workflow proves useful.", "一個產品類別、約十位已授權買家及一位具名審閱者。先驗證流程實用，再加入真正AI草擬及OCR。")}</p></section></div><section class="panel audit-panel"><h2>${t("Recent activity", "最近操作")}</h2>${
-    state.audit.length
-      ? `<ul class="audit-list">${state.audit
-          .slice(0, 12)
-          .map(
-            (a) =>
-              `<li><span>${icon("clock", 16)}${new Date(a.time).toLocaleTimeString(lang === "zh" ? "zh-HK" : "en-HK", { timeZone: "Asia/Hong_Kong", hour: "2-digit", minute: "2-digit" })}</span><div><strong>${esc(a.action)}</strong><small>${esc(a.detail)}</small></div></li>`,
-          )
-          .join("")}</ul>`
-      : `<p class="muted">${t("Your verification, matching and review actions will appear here.", "核實、配對及審閱操作會顯示於此。")}</p>`
-  }</section>`;
+  return `${heading(t("Simple updates. Useful connections.", "簡單更新，實用連繫。"), t("A guide for the classroom demo and the first pilot.", "課堂示範及首次試行指南。"), button("reset", icon("refresh", 17) + t("Reset sample stock", "重設範例庫存"), "secondary"))}<div class="guide-grid"><section class="panel"><h2>${t("For production staff", "生產職員")}</h2><ol class="demo-script"><li>${t("Choose Add stock. Speak Cantonese, photograph a sheet, or type a note.", "選擇新增庫存。講粵語、拍攝生產記錄，或輸入文字。")}</li><li>${t("Check the suggested product, quantity and best-before date.", "核對建議的產品、數量及最佳食用日期。")}</li><li>${t("Save for staff review. The update is stored online across devices.", "儲存以供職員核實，更新會跨裝置儲存。")}</li></ol><button class="btn primary" data-nav="capture">${t("Add stock", "新增庫存")}</button></section><section class="panel"><h2>${t("For sales staff", "銷售職員")}</h2><p>${t("Open Products to complete missing facts and verify a batch. Verification automatically checks customer requirements and creates personalised template offers. Customers who have opted in can receive an automatic message within an active WhatsApp reply window.", "開啟產品，補齊資料並核實產品批次。系統會自動檢查客戶要求並產生個人化範本建議。已訂閱的客戶可在WhatsApp回覆時段內自動收到訊息。")}</p><button class="btn secondary" data-nav="products">${t("View products", "查看產品")}</button></section><section class="panel"><h2>${t("For your phone demo", "手機示範")}</h2><p>${t("Message JOIN b1, then OFFERS. Send START to subscribe. Add and verify a fresh batch on the web page, then show the matching update on your phone. STOP opts out. JOIN worker switches to production-note mode.", "發送JOIN b1，再發送OFFERS。發送START訂閱，在網頁新增並核實產品，即可在手機展示合適更新。發送STOP退訂；JOIN worker切換為生產記錄模式。")}</p><button class="btn secondary" data-nav="messages">${t("Open WhatsApp messages", "開啟WhatsApp訊息")}</button></section><section class="panel"><h2>${t("What is automated", "哪些步驟已自動化")}</h2><p>${t("Photo OCR runs in your browser with Tesseract. Speech uses the browser service and may need an internet connection. Product matching uses eight explicit rules. Messages use verified facts and bilingual templates, with no OpenAI API key. WhatsApp delivery is real when connected; the labelled simulator sends nothing.", "照片使用瀏覽器內的Tesseract文字辨識。語音使用瀏覽器服務，或需網絡連線。產品配對使用八項明確規則。訊息使用已核實資料及雙語範本，無需OpenAI API key。連線後的WhatsApp發送是真實操作；標明的模擬器不會發送訊息。")}</p></section></div><section class="panel audit-panel"><h2>${t("Recent staff activity", "最近職員操作")}</h2><ul class="audit-list">${state.audit
+    .slice(0, 15)
+    .map(
+      (a) =>
+        `<li><span>${esc(new Date(a.time).toLocaleTimeString("en-HK", { timeZone: "Asia/Hong_Kong", hour: "2-digit", minute: "2-digit" }))}</span><div><strong>${esc(a.action)}</strong><small>${esc(a.detail)}</small></div></li>`,
+    )
+    .join(
+      "",
+    )}</ul><div class="button-row">${button("backup", t("Download data backup", "下載資料備份"), "secondary")}${button("export-audit", t("Export activity", "匯出操作記錄"), "secondary")}</div></section>`;
 }
 function showDialog(title, html, wide = false) {
   const d = $("#dialog");
@@ -713,6 +811,20 @@ function openDraft(id) {
 }
 function act(action, data = {}) {
   const p = product();
+  if (action === "initialise") {
+    api("/api/initialise", { method: "POST" })
+      .then((result) => {
+        acceptSnapshot(result);
+        setSyncStatus(t("Saved online", "已儲存"));
+        render();
+      })
+      .catch((e) => toast(e.message));
+    return;
+  }
+  if (action === "reload-database") {
+    location.reload();
+    return;
+  }
   if (action === "language") {
     lang = lang === "en" ? "zh" : "en";
     try {
@@ -722,7 +834,9 @@ function act(action, data = {}) {
     return;
   }
   if (action === "capture") {
-    productForm();
+    page = "capture";
+    render();
+    focusMain();
     return;
   }
   if (action === "edit-product") {
@@ -889,12 +1003,17 @@ function act(action, data = {}) {
   if (action === "reset") {
     const d = showDialog(
       t("Reset this demo?", "重設此示範？"),
-      `<p>${t("This replaces this browser’s product records, buyers, drafts and activity with the original demo. Download a backup first if you want to keep them.", "此操作將以原始示範取代此瀏覽器的產品、買家、草稿及操作記錄。如需保留，請先下載備份。")}</p><div class="button-row">${button("backup", t("Download backup", "下載備份"), "secondary")}<button class="btn danger" id="confirm-reset">${t("Reset demo data", "重設示範資料")}</button></div>`,
+      `<p>${t("This resets sample stock and reviewed drafts in the shared database. The WhatsApp connection, conversations and opt-ins are kept. Download a backup first if needed.", "此操作將重設共用資料庫的範例庫存及草稿，保留WhatsApp連線、對話及訂閱。如需要，請先下載備份。")}</p><div class="button-row">${button("backup", t("Download backup", "下載備份"), "secondary")}<button class="btn danger" id="confirm-reset">${t("Reset demo data", "重設示範資料")}</button></div>`,
     );
     d.querySelector("[data-action]").onclick = () => act("backup");
-    $("#confirm-reset").onclick = () => {
-      state = seedState();
-      persist();
+    $("#confirm-reset").onclick = async () => {
+      try {
+        await flushChanges();
+        acceptSnapshot(await api("/api/reset", { method: "POST" }));
+      } catch (error) {
+        toast(error.message);
+        return;
+      }
       selected = "p1";
       draftId = null;
       stage = "board";
@@ -1071,3 +1190,21 @@ function bind() {
     };
 }
 render();
+(async () => {
+  try {
+    const snapshot = await api("/api/workspace");
+    acceptSnapshot(snapshot);
+    syncStatus = t("Saved online", "已儲存");
+  } catch (e) {
+    bootError = e.message;
+    syncStatus = t("Connection needed", "需要連線");
+  }
+  loaded = true;
+  render();
+})();
+window.addEventListener("beforeunload", (e) => {
+  if (dirty) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});

@@ -34,3 +34,15 @@ Two narrowly scoped bundles were reviewed before installation:
 These two skills were installed using the host skill installer at the reviewed commit. The full ECC hook/rule/agent configuration was not installed or executed. A review of two bundles does not assert that the entire ECC collection is safe.
 
 Existing host skills used: PDF reading, skill installation/review, frontend design, Sites hosting and browser testing. User authorization covers implementation, branches, pushing and merging to `nurticoder/locomatch`; no automatic external customer communication is authorised or performed.
+
+## Version 2: easy capture and real automation
+
+The user's follow-up prioritises worker accessibility, shared records and WhatsApp automation. The default page is now a three-choice capture flow with large controls and editable extracted fields. Sales details remain in the staff workspace. Product/source verification happens once per batch; it then triggers deterministic matching and offer preparation automatically.
+
+The user chose browser speech and local photo OCR, so no OpenAI key is created or used. Tesseract.js runs photo recognition locally after loading its models. Browser speech may use an external speech service and may be unavailable on some devices. These are distinct from the server's templated message composition.
+
+D1 stores a small versioned shared workspace document and separately encrypted WhatsApp credentials. Record-level three-way merging preserves independent edits and rejects conflicts. It is an intentional narrow-pilot storage model, not a claim of enterprise ERP architecture.
+
+A real Twilio webhook verifies the full URL and all submitted form fields using HMAC-SHA1, validates the account/recipient, and deduplicates MessageSid values. Automated pushes require current product and customer facts, explicit opt-in and an active 24-hour reply window. A claimed outbound message is not automatically retried on an uncertain result. Signed provider callbacks distinguish accepted, sent, delivered and failed.
+
+The host audience can become public only after explicit user approval. The worker continues to enforce owner sign-in on staff pages/data and settings; only signed provider webhook routes are exposed anonymously. Demo enrollment commands use fictional profiles and must be replaced by real enrollment before operational use.

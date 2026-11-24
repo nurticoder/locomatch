@@ -6,3 +6,7 @@ node_modules/
 test-results/
 
 .venv/
+dist/
+server/assets.generated.mjs
+public/vendor/
+.local-state/
