@@ -191,7 +191,15 @@ test("CSV validates headers, row lengths, quoting and batch limit", () => {
   );
 });
 test("CSV export neutralises spreadsheet formula injection", () => {
-  for (const value of ["=1+1", "+SUM(1)", "-1", "@IMPORT", "\tcommand"])
+  for (const value of [
+    "=1+1",
+    "+SUM(1)",
+    "-1",
+    "@IMPORT",
+    "\tcommand",
+    "  =1+1",
+    "\n=1+1",
+  ])
     assert(csvCell(value).startsWith("\"'"));
   assert.equal(csvCell('a"b'), '"a""b"');
 });

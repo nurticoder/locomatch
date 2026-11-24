@@ -18,14 +18,21 @@ try {
     state.version !== 1 ||
     !Array.isArray(state.products) ||
     !Array.isArray(state.buyers) ||
-    !Array.isArray(state.drafts)
+    !Array.isArray(state.drafts) ||
+    !Array.isArray(state.audit) ||
+    !Array.isArray(state.runs)
   )
     throw Error("Invalid data");
 } catch {
   state = seedState();
 }
-let lang = localStorage.getItem("locomatch.lang") || "en",
-  page = "workspace",
+let lang = "en";
+try {
+  lang = localStorage.getItem("locomatch.lang") === "zh" ? "zh" : "en";
+} catch {
+  storageOK = false;
+}
+let page = "workspace",
   stage = "board",
   selected = "p1",
   buyerId = "b1",
@@ -264,7 +271,7 @@ function draftPage() {
   const p = state.products.find((p) => p.id === d.productId),
     b = state.buyers.find((b) => b.id === d.buyerId);
   const valid = draftIsCurrent(d);
-  return `<div class="draft-layout"><section class="panel draft-editor"><div class="section-head"><div><span class="section-tag">${t("Offer draft", "供應建議草稿")}</span><h2>${esc(name(b))}</h2></div><span class="badge ${d.approved && valid ? "green" : "amber"}">${t(d.approved && valid ? "Reviewed" : "Needs review", d.approved && valid ? "已審閱" : "待審閱")}</span></div><div class="draft-controls"><label class="field"><span>${t("Format", "格式")}</span><select id="draft-channel"><option value="email" ${d.channel === "email" ? "selected" : ""}>Email</option><option value="whatsapp" ${d.channel === "whatsapp" ? "selected" : ""}>WhatsApp</option></select></label><label class="field"><span>${t("Message language", "訊息語言")}</span><select id="draft-language"><option value="en" ${d.language === "en" ? "selected" : ""}>English</option><option value="zh" ${d.language === "zh" ? "selected" : ""}>繁體中文</option></select></label></div><div class="template-note">${icon("file", 16)}${t("Built from verified facts using a reusable template.", "使用範本，根據已核實資料草擬。")}</div>${!valid ? `<div class="notice amber" role="alert">${t("The product or buyer record changed. Recheck the match and prepare a fresh draft.", "產品或買家資料已更改。請重新配對及建立草稿。")}${button("select-match", t("Recheck match", "重新配對"), "secondary", `data-id="${d.productId}"`)}</div>` : ""}<label class="field"><span class="sr-only">${t("Edit offer message", "編輯建議訊息")}</span><textarea id="message-editor" rows="19" ${valid ? "" : "disabled"}>${esc(d.message)}</textarea></label><div class="editor-footer"><span id="save-status">${t("Saved in this browser", "已儲存在此瀏覽器")}</span><span>${t("Editing clears approval.", "編輯後須重新審閱。")}</span></div></section><aside><section class="panel offer-facts"><h2>${t("Facts behind this offer", "這份建議的資料依據")}</h2><div class="offer-product">${jar(p)}<div><strong>${esc(name(p))}</strong><small>${d.quantity} ${t("jars", "罐")}<span class="separator">/</span>${money(p.price)} ${t("each", "每罐")}</small></div></div><dl><div><dt>${t("Product subtotal", "產品金額")}</dt><dd>${money(d.quantity * p.price)}</dd></div><div><dt>${t("Best before", "最佳食用日期")}</dt><dd>${p.expiry}</dd></div><div><dt>${t("Source", "來源")}</dt><dd>${esc(p.source)}</dd></div></dl><p class="muted">${t("No environmental, food-safety or sales claims are added.", "不會加入未經核實的環境、食安或銷售聲明。")}</p></section><section class="panel approval-panel"><h2>${t("Your review comes last", "最後由你審閱")}</h2><p>${t("Check the edited message against these facts before sharing.", "分享前，請將編輯後的訊息與這些資料核對。")}</p><form id="approve-form"><label class="field"><span>${t("Sales reviewer", "銷售審閱者")}</span><input name="reviewer" required maxlength="80" value="${esc(d.approvedBy || "")}" placeholder="${t("Your name", "你的姓名")}"></label><div class="checklist">${[t("Buyer and outreach permission checked", "已核對買家及聯絡授權"), t("Stock, price and dates are accurate", "庫存、價格及日期準確"), t("Delivery terms and wording checked", "已核對配送條件及內容")].map((label, i) => `<label class="checkbox-row"><input name="check${i}" type="checkbox" required ${d.approved && valid ? "checked" : ""}><span>${label}</span></label>`).join("")}</div><button class="btn primary full" type="submit" ${!valid ? "disabled" : ""}>${icon("check", 18)}${t(d.approved ? "Approve again" : "Approve message", d.approved ? "再次批准" : "批准訊息")}</button></form><div class="export-actions">${button("copy", t("Copy message", "複製訊息"), "secondary", d.approved && valid ? "" : "disabled")}${button("download-offer", icon("download", 16) + t("Download", "下載"), "secondary", d.approved && valid ? "" : "disabled")}${d.channel === "whatsapp" ? button("whatsapp", t("Open WhatsApp", "開啟 WhatsApp"), "secondary full", d.approved && valid ? "" : "disabled") : ""}</div><p class="footnote">${t("Nothing is sent automatically. Opening WhatsApp lets you choose a recipient and send there.", "不會自動發送訊息。開啟 WhatsApp 後，由你選擇收件者並發送。")}</p>${d.approved && valid ? button("contacted", t("Record contact / follow-up", "記錄聯絡及跟進"), "quiet full", `data-id="${d.id}"`) : ""}</section></aside></div>`;
+  return `<div class="draft-layout"><section class="panel draft-editor"><div class="section-head"><div><span class="section-tag">${t("Offer draft", "供應建議草稿")}</span><h2>${esc(name(b))}</h2></div><span id="approval-status" class="badge ${d.approved && valid ? "green" : "amber"}">${t(d.approved && valid ? "Reviewed" : "Needs review", d.approved && valid ? "已審閱" : "待審閱")}</span></div><div class="draft-controls"><label class="field"><span>${t("Format", "格式")}</span><select id="draft-channel"><option value="email" ${d.channel === "email" ? "selected" : ""}>Email</option><option value="whatsapp" ${d.channel === "whatsapp" ? "selected" : ""}>WhatsApp</option></select></label><label class="field"><span>${t("Message language", "訊息語言")}</span><select id="draft-language"><option value="en" ${d.language === "en" ? "selected" : ""}>English</option><option value="zh" ${d.language === "zh" ? "selected" : ""}>繁體中文</option></select></label></div><div class="template-note">${icon("file", 16)}${t("Built from verified facts using a reusable template.", "使用範本，根據已核實資料草擬。")}</div>${!valid ? `<div class="notice amber" role="alert">${t("The product or buyer record changed. Recheck the match and prepare a fresh draft.", "產品或買家資料已更改。請重新配對及建立草稿。")}${button("select-match", t("Recheck match", "重新配對"), "secondary", `data-id="${d.productId}"`)}</div>` : ""}<label class="field"><span class="sr-only">${t("Edit offer message", "編輯建議訊息")}</span><textarea id="message-editor" rows="19" ${valid ? "" : "disabled"}>${esc(d.message)}</textarea></label><div class="editor-footer"><span id="save-status" role="status" aria-live="polite">${t("Saved in this browser", "已儲存在此瀏覽器")}</span><span>${t("Editing clears approval.", "編輯後須重新審閱。")}</span></div></section><aside><section class="panel offer-facts"><h2>${t("Facts behind this offer", "這份建議的資料依據")}</h2><div class="offer-product">${jar(p)}<div><strong>${esc(name(p))}</strong><small>${d.quantity} ${t("jars", "罐")}<span class="separator">/</span>${money(p.price)} ${t("each", "每罐")}</small></div></div><dl><div><dt>${t("Product subtotal", "產品金額")}</dt><dd>${money(d.quantity * p.price)}</dd></div><div><dt>${t("Best before", "最佳食用日期")}</dt><dd>${p.expiry}</dd></div><div><dt>${t("Source", "來源")}</dt><dd>${esc(p.source)}</dd></div></dl><p class="muted">${t("No environmental, food-safety or sales claims are added.", "不會加入未經核實的環境、食安或銷售聲明。")}</p></section><section class="panel approval-panel"><h2>${t("Your review comes last", "最後由你審閱")}</h2><p>${t("Check the edited message against these facts before sharing.", "分享前，請將編輯後的訊息與這些資料核對。")}</p><form id="approve-form"><label class="field"><span>${t("Sales reviewer", "銷售審閱者")}</span><input name="reviewer" required maxlength="80" value="${esc(d.approvedBy || "")}" placeholder="${t("Your name", "你的姓名")}"></label><div class="checklist">${[t("Buyer and outreach permission checked", "已核對買家及聯絡授權"), t("Stock, price and dates are accurate", "庫存、價格及日期準確"), t("Delivery terms and wording checked", "已核對配送條件及內容")].map((label, i) => `<label class="checkbox-row"><input name="check${i}" type="checkbox" required ${d.approved && valid ? "checked" : ""}><span>${label}</span></label>`).join("")}</div><button class="btn primary full" type="submit" ${!valid ? "disabled" : ""}>${icon("check", 18)}${t(d.approved ? "Approve again" : "Approve message", d.approved ? "再次批准" : "批准訊息")}</button></form><div class="export-actions">${button("copy", t("Copy message", "複製訊息"), "secondary", d.approved && valid ? "" : "disabled")}${button("download-offer", icon("download", 16) + t("Download", "下載"), "secondary", d.approved && valid ? "" : "disabled")}${d.channel === "whatsapp" ? button("whatsapp", t("Open WhatsApp", "開啟 WhatsApp"), "secondary full", d.approved && valid ? "" : "disabled") : ""}</div><p class="footnote">${t("Nothing is sent automatically. Opening WhatsApp lets you choose a recipient and send there.", "不會自動發送訊息。開啟 WhatsApp 後，由你選擇收件者並發送。")}</p>${d.approved && valid ? button("contacted", t("Record contact / follow-up", "記錄聯絡及跟進"), "quiet full", `data-id="${d.id}"`) : ""}</section></aside></div>`;
 }
 function productsPage() {
   const list = state.products.filter(
@@ -924,12 +931,13 @@ function bind() {
         toast(t("Complete the missing facts first.", "請先補齊資料。"));
         return;
       }
-      p.status = "verified";
-      p.reviewer = f.get("reviewer").trim();
-      if (!p.reviewer) {
+      const reviewer = f.get("reviewer").trim();
+      if (!reviewer) {
         toast(t("Enter the reviewer’s name.", "請輸入審閱者姓名。"));
         return;
       }
+      p.status = "verified";
+      p.reviewer = reviewer;
       p.verifiedAt = new Date().toISOString();
       log("Product verified", p.name + " / " + p.reviewer);
       stage = "match";
@@ -956,25 +964,40 @@ function bind() {
       render();
     };
   const d = state.drafts.find((d) => d.id === draftId);
-  if ($("#message-editor"))
+  const clearApproval = (resetChecks = false) => {
+    d.approved = false;
+    d.approvedBy = "";
+    d.approvedAt = null;
+    persist();
+    const badge = $("#approval-status");
+    badge.className = "badge amber";
+    badge.textContent = t("Needs review", "待審閱");
+    $("#approve-form button[type=submit]").innerHTML =
+      icon("check", 18) + t("Approve message", "批准訊息");
+    document
+      .querySelectorAll(
+        '[data-action="copy"],[data-action="download-offer"],[data-action="whatsapp"]',
+      )
+      .forEach((b) => (b.disabled = true));
+    if (resetChecks) {
+      $("#approve-form")
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((b) => (b.checked = false));
+    }
+  };
+  if ($("#message-editor")) {
     $("#message-editor").oninput = (e) => {
       d.message = e.target.value;
-      d.approved = false;
-      d.approvedBy = "";
-      persist();
+      clearApproval(true);
       $("#save-status").textContent = t(
         "Changes saved. Review again before sharing.",
         "已儲存更改。分享前請重新審閱。",
       );
-      document
-        .querySelectorAll(
-          '[data-action="copy"],[data-action="download-offer"],[data-action="whatsapp"]',
-        )
-        .forEach((b) => (b.disabled = true));
-      $("#approve-form")
-        .querySelectorAll('input[type="checkbox"]')
-        .forEach((b) => (b.checked = false));
     };
+    $("#approve-form").oninput = (e) => {
+      if (d.approved) clearApproval(e.target.type !== "checkbox");
+    };
+  }
   ["draft-channel", "draft-language"].forEach((id) => {
     if ($("#" + id))
       $("#" + id).onchange = (e) => {

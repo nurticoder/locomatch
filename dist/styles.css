@@ -2370,3 +2370,71 @@ dialog > p {
     box-shadow: none;
   }
 }
+
+/* Keep review criteria, product facts and form controls readable on a projector. */
+.field,
+.checkbox-row,
+.buyer-terms,
+.rule-checks li,
+.rule-checks small,
+.template-note,
+.summary-content dl,
+.offer-facts dl {
+  font-size: 0.875rem;
+}
+.buyer-note,
+.draft-editor textarea,
+.guide-grid .panel > p,
+.panel > .muted {
+  font-size: 1rem;
+}
+.draft-editor textarea {
+  line-height: 1.75;
+}
+.product-numbers span,
+.feature-foot,
+.tiny-note,
+.batch-info p,
+.batch-link,
+.match-header p,
+.source-note,
+.summary-content > p {
+  font-size: 0.875rem;
+}
+.feature-copy > p,
+.review-panel > p,
+.review-item strong {
+  font-size: 1rem;
+}
+@media (max-width: 1250px) {
+  .product-numbers {
+    gap: 17px;
+  }
+  .product-numbers span {
+    font-size: 0.78rem;
+  }
+  .feature-foot,
+  .tiny-note {
+    font-size: 0.78rem;
+  }
+  .feature-copy > p {
+    font-size: 0.9rem;
+  }
+}
+@media (max-width: 760px) {
+  .batch-info p,
+  .batch-link,
+  .feature-foot,
+  .tiny-note,
+  .product-numbers span {
+    font-size: 0.78rem;
+  }
+  .feature-copy > p {
+    font-size: 0.9rem;
+  }
+  .field,
+  .checkbox-row,
+  .form-grid .field {
+    font-size: 0.875rem;
+  }
+}
