@@ -9,6 +9,9 @@ import {
   parseCSV,
   csvCell,
 } from "./domain.js";
+const publicDemo =
+  document.querySelector('meta[name="locomatch-public-demo"]')?.content ===
+  "true";
 let state = seedState();
 let storageOK = true,
   lang = "en";
@@ -75,7 +78,8 @@ function jar(p, large = false) {
   return `<svg class="product-art ${large ? "large" : ""}" viewBox="0 0 160 180" role="img" aria-label="${esc(name(p))} ${t("illustration", "插圖")}"><ellipse cx="80" cy="166" rx="45" ry="7" fill="${a[0]}" opacity=".14"/><rect x="42" y="28" width="76" height="17" rx="5" fill="#324b3c"/><path d="M47 46h66l6 15v86c0 9-8 15-17 15H58c-10 0-17-6-17-15V61z" fill="${a[0]}"/><path d="M48 64v78" stroke="${a[1]}" stroke-width="4" opacity=".7" stroke-linecap="round"/><rect x="40" y="79" width="80" height="59" rx="2" fill="#fffdf4"/><text x="80" y="93" text-anchor="middle" font-family="Georgia,serif" font-size="8" fill="#34543c">LoCoFARMS</text><circle cx="80" cy="111" r="11" fill="${a[0]}"/><path d="M79 100q4-8 11-5-2 7-11 5" fill="#426b42"/><path d="M73 111h14M80 104v14" stroke="${a[2]}" stroke-width="1"/><text x="80" y="131" text-anchor="middle" font-family="Arial,sans-serif" font-size="5.5" fill="#34543c">LOCAL PRODUCE · DEMO</text></svg>`;
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const endpoint = publicDemo ? path.replace(/^\/api\//, "/api/demo/") : path;
+  const response = await fetch(endpoint, {
     ...options,
     headers: { "Content-Type": "application/json", ...options.headers },
   });
@@ -156,10 +160,12 @@ async function refreshWorkspace() {
 }
 function easyContext() {
   return {
+    publicDemo,
     state,
     t,
     esc,
     icon,
+    jar,
     name,
     button,
     api,
@@ -169,6 +175,7 @@ function easyContext() {
     flush: flushChanges,
     refresh: refreshWorkspace,
     acceptSnapshot,
+    focus: focusMain,
     navigate: (target) => {
       page = target;
       stage = "board";
@@ -177,7 +184,9 @@ function easyContext() {
     },
     review: (id) => act("verify", { id }),
     addProduct: async (p) => {
-      state.products.push(p);
+      const index = state.products.findIndex((v) => v.id === p.id);
+      if (index >= 0 && p.demoOnly) state.products[index] = p;
+      else state.products.push(p);
       log("Worker stock update", p.name + " / " + p.quantity + " jars");
       await flushChanges();
     },
@@ -219,10 +228,11 @@ function shell() {
     ["messages", "mail", t("WhatsApp messages", "WhatsApp訊息")],
     ["outreach", "file", t("Reviewed offers", "已審閱建議")],
   ];
-  return `<aside class="sidebar"><a class="brand" href="#" data-nav="capture"><img src="./mark.svg" alt="" width="39" height="39"><span>LoCoMatch<small>${t("Made for FarmShare", "為 FarmShare 而設")}</small></span></a><div class="workspace-label">${t("Your workbench", "你的工作台")}</div><nav aria-label="${t("Main navigation", "主選單")}">${nav.map(([id, ic, label]) => `<button class="nav-item ${page === id ? "active" : ""}" data-nav="${id}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "products" && pending ? `<span class="nav-count">${pending}</span>` : ""}${id === "outreach" && state.drafts.length ? `<span class="nav-count">${state.drafts.length}</span>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><button class="nav-item ${page === "guide" ? "active" : ""}" data-nav="guide">${icon("book")}<span>${t("Demo & pilot guide", "示範及試行指南")}</span></button><div class="partner"><div class="partner-icon">${icon("leaf", 23)}</div><div>FarmShare<small>CCAI9022 · ${t("Group 3", "第3組")}</small></div></div></div></aside><div class="app-body"><header class="topbar"><span>${t("FarmShare outreach workspace", "FarmShare 客戶聯絡工作台")}</span><div class="top-actions"><span class="database-status" id="database-state">${esc(syncStatus)}</span><span class="demo-label">${t("Demo data", "示範資料")}</span><button class="lang-btn" data-action="language" aria-label="${t("Switch to Traditional Chinese", "切換至英文")}">${lang === "en" ? "繁體中文" : "English"}</button><span class="avatar" title="${t("Demo workspace, no sign-in", "示範工作台，無需登入")}">FS</span></div></header><main id="main" tabindex="-1">${!storageOK ? `<div class="notice amber">${t("Local saving is unavailable. Download a backup before leaving.", "無法在本機儲存，離開前請下載備份。")}</div>` : ""}${renderPage()}</main><footer>${icon("shield", 14)}<span>${t("Fictional products and customers. Records are saved in the shared database.", "產品及客戶均為虛構，記錄儲存至共用資料庫。")}</span><button data-nav="guide">${t("About this prototype", "關於此原型")}</button></footer></div>`;
+  return `<aside class="sidebar"><a class="brand" href="#" data-nav="capture"><img src="./mark.svg" alt="" width="39" height="39"><span>LoCoMatch<small>${t("Made for FarmShare", "為 FarmShare 而設")}</small></span></a><div class="workspace-label">${t("Your workbench", "你的工作台")}</div><nav aria-label="${t("Main navigation", "主選單")}">${nav.map(([id, ic, label]) => `<button class="nav-item ${page === id ? "active" : ""}" data-nav="${id}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "products" && pending ? `<span class="nav-count">${pending}</span>` : ""}${id === "outreach" && state.drafts.length ? `<span class="nav-count">${state.drafts.length}</span>` : ""}</button>`).join("")}</nav><div class="sidebar-bottom"><button class="nav-item ${page === "guide" ? "active" : ""}" data-nav="guide">${icon("book")}<span>${t("Demo & pilot guide", "示範及試行指南")}</span></button><div class="partner"><div class="partner-icon">${icon("leaf", 23)}</div><div>FarmShare<small>CCAI9022 · ${t("Group 3", "第3組")}</small></div></div></div></aside><div class="app-body"><header class="topbar"><span class="topbar-brand"><img src="./mark.svg" alt="" width="30" height="30">LoCoMatch <small>${t("for FarmShare", "為FarmShare而設")}</small></span><div class="top-actions"><span class="database-status" id="database-state">${esc(syncStatus)}</span><span class="demo-label">${publicDemo ? t("Public demo", "公開示範") : t("Demo data", "示範資料")}</span><button class="lang-btn" data-action="language" aria-label="${t("Switch to Traditional Chinese", "切換至英文")}">${lang === "en" ? "繁體中文" : "English"}</button><span class="avatar" title="${t("Demo workspace, no sign-in", "示範工作台，無需登入")}">FS</span></div></header><main id="main" tabindex="-1">${!storageOK ? `<div class="notice amber">${t("Local saving is unavailable. Download a backup before leaving.", "無法在本機儲存，離開前請下載備份。")}</div>` : ""}${renderPage()}</main><footer>${icon("shield", 14)}<span>${t("Fictional products and customers. Records are saved in the shared database.", "產品及客戶均為虛構，記錄儲存至共用資料庫。")}</span><button data-nav="guide">${t("About this prototype", "關於此原型")}</button></footer></div>`;
 }
 function render() {
   document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en-HK";
+  document.body.classList.toggle("simple-capture", page === "capture");
   $("#app").innerHTML = shell();
   bind();
   bindEasy(easyContext());
@@ -1192,7 +1202,8 @@ function bind() {
 render();
 (async () => {
   try {
-    const snapshot = await api("/api/workspace");
+    let snapshot = await api("/api/workspace");
+    if (!snapshot.state && publicDemo) snapshot = await api("/api/initialise", { method: "POST" });
     acceptSnapshot(snapshot);
     syncStatus = t("Saved online", "已儲存");
   } catch (e) {
