@@ -395,6 +395,11 @@ export function createMessage(
       "Offer quantity must fit available stock and the buyer request.",
     );
   const total = (Number(p.price) * quantity).toFixed(0);
+  if (channel === "whatsapp") {
+    if (language === "zh")
+      return `${b.nameZh || b.name}你好！FarmShare有${p.nameZh || p.name}，可供貴公司${b.purposeZh || b.purpose}使用。\n\n${quantity}罐，每罐HK$${p.price}，合共HK$${total}。\n可供應：${p.available}\n最佳食用日期：${p.expiry}\n儲存：${p.storage === "Chilled" ? "冷藏" : "室溫"}\n${p.deliveryZh || p.delivery}\n\n有興趣嗎？回覆我們確認標籤、送貨日期及訂單。`;
+    return `Hi ${b.name}! FarmShare has ${p.name.toLowerCase()} for your ${b.purpose.toLowerCase()}.\n\n${quantity} jars at HK$${p.price} each (HK$${total} total).\nAvailable: ${p.available}\nBest before: ${p.expiry}\nStorage: ${p.storage}\n${p.delivery}\n\nInterested? Reply to confirm the label, delivery date and order.`;
+  }
   if (language === "zh")
     return `${channel === "email" ? `主旨：${b.nameZh || b.name}的${p.nameZh || p.name}供應建議\n\n` : ""}${b.nameZh || b.name}團隊您好：\n\n得知貴公司有${b.purposeZh || b.purpose}的採購需要，現提供 FarmShare ${p.nameZh || p.name}供參考。\n\n數量：${quantity}罐\n單價：HK$${p.price}／罐\n產品金額：HK$${total}\n可供應日期：${p.available}\n最佳食用日期：${p.expiry}\n儲存方式：${p.storage === "Chilled" ? "冷藏" : "室溫"}\n配送：${p.deliveryZh || p.delivery}\n\n請問這項供應是否適合貴公司的需要？如有興趣，我們可再確認產品標籤、配送日期及最終訂單詳情。\n\n謝謝！\nFarmShare 團隊`;
   return `${channel === "email" ? `Subject: ${p.name} for ${b.name}\n\n` : ""}Hello ${b.name} team,\n\nYou have recorded an interest in ${b.purpose.toLowerCase()}. We have ${p.name.toLowerCase()} available at FarmShare that may suit your needs.\n\nQuantity: ${quantity} jars\nPrice: HK$${p.price} per jar\nProduct subtotal: HK$${total}\nAvailable from: ${p.available}\nBest before: ${p.expiry}\nStorage: ${p.storage}\nDelivery: ${p.delivery}\n\nWould this be useful for your next order? We can confirm the product label, delivery date and final order details with you.\n\nThank you,\nThe FarmShare team`;

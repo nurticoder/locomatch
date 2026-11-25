@@ -2970,3 +2970,84 @@ dialog > p {
     font-size: 1rem;
   }
 }
+
+/* The classroom flow gives each screen one clear next action. */
+.topbar-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 750; font-size: 1.15rem; }
+.topbar-brand small { font-size: .9rem; font-weight: 450; }
+.simple-capture .sidebar { display: none; }
+.simple-capture .app-body { margin-left: 0; padding-bottom: 0; }
+.simple-capture .topbar { max-width: 1100px; margin: auto; height: 72px; padding: 0 28px; border: 0; background: transparent; }
+.simple-capture .topbar > .topbar-brand { display: flex; }
+.simple-capture .avatar { display: none; }
+.simple-capture #main { max-width: 850px; margin: auto; padding: 22px 28px 12px; }
+.simple-capture footer { max-width: 850px; margin: auto; padding: 20px 28px; font-size: .875rem; }
+.quick-demo { max-width: 650px; margin: auto; }
+.quick-steps { list-style: none; display: flex; gap: 18px; padding: 0; margin: 0 0 32px; color: #748078; font-size: .9rem; }
+.quick-steps li { display: flex; align-items: center; gap: 8px; flex: 1; line-height: 1.3; }
+.quick-steps li > span { display: grid; place-items: center; width: 27px; height: 27px; flex-shrink: 0; border: 1px solid #b7c5b9; border-radius: 50%; font-size: .875rem; }
+.quick-steps .reached { color: var(--green); font-weight: 650; }
+.quick-steps .reached > span { color: white; background: var(--green); border-color: var(--green); }
+.quick-content h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); line-height: 1.2; letter-spacing: -.9px; }
+.quick-intro { margin: 10px 0 25px; font-size: 1.1rem; color: var(--muted); }
+.quick-stock { display: flex; align-items: center; gap: 24px; background: white; border: 1px solid var(--line); border-radius: 18px; margin-bottom: 22px; padding: 20px 28px 20px 8px; }
+.quick-jar { width: 160px; flex-shrink: 0; }
+.quick-jar .product-art.large { width: 160px; height: 180px; }
+.quick-stock-copy { flex: 1; }
+.quick-stock-copy h2 { font-size: 1.4rem; margin-bottom: 9px; }
+.quick-stock-copy > p { font-size: 1rem; }
+.quick-choices { display: flex; gap: 10px; margin: 14px 0; }
+.quick-choices button, .quick-recipients button { border: 1px solid #b8c8bb; background: white; border-radius: 9px; padding: 12px 17px; min-height: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: 650; }
+.quick-choices button { flex: 1; font-size: 1.15rem; white-space: nowrap; }
+.quick-choices button[aria-pressed="true"], .quick-recipients button[aria-pressed="true"] { background: var(--pale); border: 2px solid var(--green); padding: 11px 16px; color: var(--green-dark); }
+.quick-facts { color: var(--muted); }
+.quick-primary { width: 100%; min-height: 60px; display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 1.2rem; border-radius: 10px; }
+.quick-caption { color: var(--muted); text-align: center; font-size: .875rem; margin-top: 10px; line-height: 1.5; }
+.quick-other { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.quick-other button { min-height: 48px; font-size: .95rem; display: inline-flex; gap: 7px; align-items: center; }
+.quick-demo-note { font-size: .875rem; color: var(--muted); margin-top: 5px; }
+.quick-error { color: #a42929; margin-top: 10px; }
+.quick-error:empty { display: none; }
+.quick-success { display: flex; align-items: center; gap: 8px; color: var(--green); margin-bottom: 18px; font-weight: 650; }
+.quick-success span { font-weight: 450; color: var(--muted); margin-left: auto; }
+.quick-customers { display: grid; gap: 0; background: white; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
+.quick-customer { display: flex; gap: 15px; align-items: center; padding: 17px 20px; }
+.quick-customer + .quick-customer { border-top: 1px solid var(--line); }
+.quick-customer > div { flex: 1; }
+.quick-customer > svg { color: var(--green); }
+.quick-customer h2 { font-size: 1.1rem; }
+.quick-customer p { color: var(--muted); font-size: .9rem; }
+.quick-recipients { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.quick-recipients button { font-size: .95rem; min-height: 44px; }
+.quick-phone { background: #e9eee7; border: 1px solid #d6e1d8; border-radius: 14px; overflow: hidden; }
+.quick-phone-top { display: flex; align-items: center; gap: 10px; padding: 15px 20px; background: var(--green-dark); color: white; }
+.quick-phone-top span { margin-left: auto; font-size: .875rem; }
+.quick-chat { margin: 18px; padding: 18px 20px 12px; border-radius: 2px 12px 12px 12px; background: white; }
+.quick-chat p { white-space: pre-wrap; font-size: 1rem; line-height: 1.65; }
+.quick-chat > span { display: block; text-align: right; margin-top: 10px; color: var(--muted); font-size: .875rem; }
+.quick-message-actions { display: flex; gap: 12px; margin-top: 20px; }
+.quick-message-actions button { flex: 1; min-height: 54px; font-size: 1rem; }
+@media (max-width: 600px) {
+  .simple-capture .topbar { padding: 0 18px; height: 65px; }
+  .simple-capture .topbar-brand small, .simple-capture .database-status, .simple-capture .demo-label { display: none; }
+  .simple-capture #main { padding: 16px 18px 8px; }
+  .simple-capture footer { padding: 18px; }
+  .simple-capture footer > button { display: none; }
+  .quick-steps { gap: 8px; margin-bottom: 25px; font-size: .875rem; }
+  .quick-steps li { gap: 5px; }
+  .quick-steps li > span { width: 23px; height: 23px; }
+  .quick-intro { font-size: 1rem; margin-bottom: 20px; }
+  .quick-stock { gap: 4px; padding: 16px 16px 16px 0; }
+  .quick-jar, .quick-jar .product-art.large { width: 94px; }
+  .quick-stock-copy h2 { font-size: 1.15rem; }
+  .quick-choices { gap: 7px; }
+  .quick-choices button { font-size: 1rem; padding: 11px 9px; gap: 5px; }
+  .quick-choices button[aria-pressed="true"] { padding: 10px 8px; }
+  .quick-stock-copy > p { font-size: .875rem; }
+  .quick-other { align-items: stretch; gap: 6px; }
+  .quick-other button { font-size: .875rem; }
+  .quick-other button > svg:nth-child(2) { display: none; }
+  .quick-customer { padding: 16px; gap: 12px; }
+  .quick-phone-top { flex-wrap: wrap; padding: 13px 16px; }
+  .quick-phone-top span { margin-left: 31px; width: 100%; }
+  .quick-chat { margin: 12px; padding: 15px; }
+}

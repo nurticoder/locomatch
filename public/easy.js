@@ -1,6 +1,7 @@
 import { extractStockNote } from "./capture-domain.js";
-import { today, addDays } from "./domain.js";
-let mode = "pick",
+import { today, addDays, matchBuyer, createMessage } from "./domain.js";
+import { demoChoices, demoStock } from "./quick-demo.js";
+let mode = "quick",
   method = "manual",
   note = "",
   extracted = {},
@@ -10,6 +11,21 @@ let mode = "pick",
   savedProduct = null,
   recognition = null,
   ocrWorker = null;
+let demoStep = "stock", demoChoice = "small", demoBuyer = "", demoError = "";
+function quickPage(c) {
+  const { t, esc, icon, name } = c;
+  const p = savedProduct?.demoOnly && demoStep !== "stock" ? savedProduct : demoStock(demoChoice);
+  const matches = c.state.buyers.filter((b) => matchBuyer(p, b).eligible);
+  const customer = matches.find((b) => b.id === demoBuyer) || matches[0];
+  const steps = [t("Add stock", "新增庫存"), t("Find customers", "配對客戶"), t("Message ready", "訊息準備好")];
+  const step = demoStep === "stock" ? 0 : demoStep === "matches" ? 1 : 2;
+  const progress = `<ol class="quick-steps" aria-label="${t("Demo progress", "示範進度")}">${steps.map((label, i) => `<li ${i === step ? 'aria-current="step"' : ""} class="${i <= step ? "reached" : ""}"><span>${i < step ? icon("check", 16) : i + 1}</span>${label}</li>`).join("")}</ol>`;
+  let body;
+  if (demoStep === "stock") body = `<h1>${t("What’s ready today?", "今日有咩做好？")}</h1><p class="quick-intro">${t("Try a ready-made example. No typing needed.", "試下現成例子，唔使打字。")}</p><section class="quick-stock"><div class="quick-jar">${c.jar(p, true)}</div><div class="quick-stock-copy"><h2>${t("Orange marmalade", "香橙果醬")}</h2><p>${t("How many jars are ready?", "有幾多罐做好？")}</p><div class="quick-choices" role="group" aria-label="${t("Sample quantity", "示範數量")}">${demoChoices.map((v) => `<button data-easy="demo-choice" data-choice="${v.id}" aria-pressed="${demoChoice === v.id}">${t(v.en, v.zh)}${demoChoice === v.id ? icon("check", 18) : ""}</button>`).join("")}</div><p class="quick-facts">${t("HK$38 per jar · Ready to sell", "每罐HK$38 · 可供應")}</p></div></section><button class="btn primary quick-primary" data-easy="demo-match" ${busy ? "disabled" : ""}>${busy ? t("Saving & finding customers…", "儲存及配對中…") : t("Find customers", "搵合適客戶")}${icon("users", 22)}</button><p class="quick-caption">${t("Saves the sample stock and checks each customer’s needs.", "儲存示範庫存，並核對每位客戶的需要。")}</p>`;
+  else if (demoStep === "matches") body = `<div class="quick-success">${icon("check", 20)}${t("Stock saved", "庫存已儲存")} <span>${p.quantity} ${t("jars", "罐")} · HK$38</span></div><h1>${matches.length ? t(`${matches.length} customers are a match.`, `${matches.length}位客戶啱買。`) : t("No matching customers yet.", "暫時未有合適客戶。")}</h1><p class="quick-intro">${t("They want this product, at this price, in this quantity.", "產品、價格及數量，都符合佢哋嘅需要。")}</p><div class="quick-customers">${matches.map((b) => `<div class="quick-customer"><span class="buyer-avatar">${esc(b.initials)}</span><div><h2>${esc(name(b))}</h2><p>${b.quantity} ${t("jars wanted", "罐需求")} · ${esc(b.district)}</p></div>${icon("check", 22)}</div>`).join("")}</div><button class="btn primary quick-primary" data-easy="demo-message" ${!matches.length ? "disabled" : ""}>${t("Show WhatsApp message", "睇WhatsApp訊息")}${icon("mail", 22)}</button><p class="quick-caption">${t("Each offer is checked separately. Stock is not reserved.", "每份建議獨立核對，庫存尚未預留。")}</p>`;
+  else body = `<h1>${t("Their message is ready.", "客戶訊息準備好。")}</h1><p class="quick-intro">${t("Written from the stock you just saved.", "根據你啱啱儲存嘅庫存，自動準備。")}</p>${matches.length > 1 ? `<div class="quick-recipients" role="group" aria-label="${t("Choose customer", "選擇客戶")}">${matches.map((b) => `<button data-easy="demo-buyer" data-id="${esc(b.id)}" aria-pressed="${customer?.id === b.id}">${esc(name(b))}</button>`).join("")}</div>` : ""}<section class="quick-phone"><div class="quick-phone-top">${icon("mail", 21)}<strong>${esc(customer ? name(customer) : "")}</strong><span>${t("Message preview", "訊息預覽")}</span></div><div class="quick-chat"><p>${esc(customer ? createMessage(p, customer, { channel: "whatsapp", language: t("en", "zh") }) : t("Customer details changed. Find customers again.", "客戶資料已更改，請重新配對。"))}</p><span>${t("Sample · not sent", "示範 · 未發送")}</span></div></section><div class="quick-message-actions"><button class="btn primary" data-easy="demo-copy" ${!customer ? "disabled" : ""}>${t("Copy message", "複製訊息")}</button><button class="btn secondary" data-easy="demo-restart">${icon("refresh", 18)}${t("Try again", "再試一次")}</button></div><p class="quick-caption">${t("This preview sends nothing. Live WhatsApp uses the private connection.", "此預覽不會發送訊息。真正WhatsApp使用私人連線。")}</p>`;
+  return `<div class="quick-demo">${progress}<div class="quick-content" aria-live="polite">${body}<p class="quick-error" role="alert">${esc(demoError)}</p></div><div class="quick-other"><button class="text-btn" data-easy="pick">${icon("mic", 18)}${icon("file", 18)}${t("Use my voice, photo or text", "用語音、照片或文字輸入")}</button><button class="text-btn" data-easy="records">${t("View database", "查看資料庫")}</button></div><p class="quick-demo-note">${t("Classroom demo. Sample details are already checked.", "課堂示範，範例資料已預先核對。")}</p></div>`;
+}
 function productOptions(c) {
   const unique = c.state.products.filter(
     (p, index, all) => all.findIndex((v) => v.name === p.name) === index,
@@ -23,10 +39,11 @@ function productOptions(c) {
 }
 export function capturePage(c) {
   const { t, esc, icon, button } = c;
+  if (mode === "quick") return quickPage(c);
   if (mode === "saved")
     return `<section class="capture-saved panel">${icon("check", 44)}<h1>${t("Your stock update is saved.", "已儲存你的庫存更新。")}</h1><p>${esc(savedProduct?.name)}<br><strong>${savedProduct?.quantity}</strong> ${t("jars added for staff review.", "罐，等待職員核實。")}</p><div class="notice green">${t("The sales team will check the details. Once approved, LoCoMatch finds matching customers and prepares their messages automatically.", "銷售團隊會核對資料。核實後，LoCoMatch 會自動配對合適客戶及準備訊息。")}</div><div class="button-row"><button class="btn primary" data-easy="again">${t("Add another update", "新增另一筆更新")}</button><button class="btn secondary" data-easy="review-saved">${t("Review as sales staff", "以銷售職員身份核實")}</button></div></section>`;
   if (mode === "pick")
-    return `<div class="easy-heading"><span class="easy-kicker">${t("For production staff", "生產團隊專用")}</span><h1>${t("What did you make today?", "今日做咗啲乜？")}</h1><p>${t("Speak, take a photo, or type. We’ll help fill in the details.", "講一句、影張相，或者輸入文字。我們會協助填好資料。")}</p></div><div class="capture-options">${[
+    return `<div class="easy-heading"><button class="back-link" data-easy="quick">${t("Back to the quick demo", "返回快速示範")}</button><span class="easy-kicker">${t("For production staff", "生產團隊專用")}</span><h1>${t("What did you make today?", "今日做咗啲乜？")}</h1><p>${t("Speak, take a photo, or type. We’ll help fill in the details.", "講一句、影張相，或者輸入文字。我們會協助填好資料。")}</p></div><div class="capture-options">${[
       [
         "voice",
         "mic",
@@ -99,6 +116,13 @@ export function botPage(c) {
 }
 export async function showWhatsAppSettings(c) {
   const { t, esc } = c;
+  if (c.publicDemo) {
+    c.showDialog(
+      t("Public demo connection", "公開示範連線"),
+      `<p>${t("You can edit products and customers, scan photos, verify stock, prepare offers, and test the bot simulator here. Live WhatsApp credentials and sending stay in the owner's private staff workspace.", "你可在此編輯產品及客戶、掃描照片、核實庫存、準備建議及試用聊天機械人模擬器。真正的WhatsApp憑證及發送功能保留於擁有者的私人職員工作台。")}</p>`,
+    );
+    return;
+  }
   let settings;
   try {
     settings = await c.api("/api/settings/whatsapp");
@@ -141,6 +165,41 @@ export function bindEasy(c) {
     (el) =>
       (el.onclick = async () => {
         const action = el.dataset.easy;
+        if (action === "demo-choice") {
+          demoChoice = el.dataset.choice;
+          demoError = "";
+          c.render();
+        }
+        if (action === "demo-match") {
+          if (busy) return;
+          busy = true;
+          demoError = "";
+          const p = demoStock(demoChoice);
+          c.render();
+          try {
+            await c.addProduct(p);
+            savedProduct = p;
+            demoStep = "matches";
+            demoBuyer = "";
+          } catch (error) {
+            demoError = error.message;
+          } finally { busy = false; c.render(); c.focus(); }
+        }
+        if (action === "demo-message") { demoStep = "message"; c.render(); c.focus(); }
+        if (action === "demo-buyer") { demoBuyer = el.dataset.id; c.render(); }
+        if (action === "demo-copy") {
+          const matches = c.state.buyers.filter((b) => matchBuyer(savedProduct, b).eligible);
+          const b = matches.find((b) => b.id === demoBuyer) || matches[0];
+          if (!b) return;
+          try {
+            await navigator.clipboard.writeText(createMessage(savedProduct, b, { channel: "whatsapp", language: t("en", "zh") }));
+            c.toast(t("Message copied.", "已複製訊息。"));
+          } catch { c.toast(t("Select and copy the message above.", "請選取並複製上方訊息。")); }
+        }
+        if (action === "demo-restart" || action === "quick") {
+          mode = "quick"; demoStep = "stock"; demoError = ""; c.render(); c.focus();
+        }
+        if (action === "records") c.navigate("products");
         if (action === "choose") {
           method = el.dataset.method;
           mode = "input";
@@ -263,7 +322,7 @@ export function bindEasy(c) {
       try {
         const { createWorker } = await import("./vendor/ocr.js");
         ocrWorker = await createWorker(["eng", "chi_tra"], 1, {
-          workerPath: new URL("./vendor/worker.min.js", location.href).href,
+          workerPath: new URL("./vendor/worker.min.js", document.baseURI).href,
           corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0",
           langPath: "https://tessdata.projectnaptha.com/4.0.0",
           logger: (m) => {

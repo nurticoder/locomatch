@@ -7,6 +7,10 @@ import { seedState, today, addDays } from "../public/domain.js";
 import { extractStockNote, chineseNumber } from "../public/capture-domain.js";
 import { handleAPI } from "../server/api.mjs";
 import {
+  handlePublicPreview,
+  publicPreviewHTML,
+} from "../server/public-preview.mjs";
+import {
   mergeWorkspace,
   ConflictError,
   loadWorkspace,
@@ -357,4 +361,108 @@ test("a real customer's language choice is used in automatic promotions", () => 
   prepareAutomaticOffers(before, s);
   const offer = s.bot.outbox.find((o) => o.buyerId === "b1");
   assert.match(offer.body, /本地香橙果醬/);
+});
+
+const anonymousPreview = (path, method = "GET", body) =>
+  new Request("https://demo.example/api/demo" + path, {
+    method,
+    headers: {
+      Origin: "https://demo.example",
+      "Content-Type": "application/json",
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+test("public preview opens without an account and uses its own database row", async () => {
+  const { env } = setup();
+  const main = await createWorkspace(env.DB);
+  main.state.products[0].name = "Private product";
+  await env.DB.prepare("UPDATE workspace_state SET data_json=? WHERE id=?")
+    .bind(JSON.stringify(main.state), "main")
+    .run();
+  const r = await handlePublicPreview(
+    anonymousPreview("/initialise", "POST", {}),
+    env,
+    ctx,
+  );
+  assert.equal(r.status, 200);
+  const preview = await r.json();
+  assert.equal(preview.state.products[0].name, "Orange marmalade");
+  assert.equal(
+    (await loadWorkspace(env.DB)).state.products[0].name,
+    "Private product",
+  );
+  const result = await handlePublicPreview(
+    anonymousPreview("/workspace"),
+    env,
+    ctx,
+  );
+  assert.equal(result.status, 200);
+});
+test("public visitors can edit and verify demo records without sending real messages", async () => {
+  const { env } = setup();
+  await createWorkspace(env.DB);
+  const init = await handlePublicPreview(
+    anonymousPreview("/initialise", "POST", {}),
+    env,
+    ctx,
+  );
+  const base = await init.json(),
+    next = structuredClone(base.state);
+  next.products[0].quantity = 121;
+  let dispatches = 0;
+  const r = await handlePublicPreview(
+    anonymousPreview("/workspace", "PUT", { base: base.state, state: next }),
+    env,
+    { waitUntil: () => dispatches++ },
+  );
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).generated, 4);
+  assert.equal(dispatches, 0);
+  assert.equal((await loadWorkspace(env.DB)).state.products[0].quantity, 120);
+});
+test("public demo cannot access credentials, live webhooks, identity or dispatch", async () => {
+  const { env } = setup();
+  for (const path of [
+    "/settings/whatsapp",
+    "/bot/dispatch",
+    "/whatsapp/incoming",
+    "/identity",
+  ]) {
+    for (const method of ["GET", "POST"]) {
+      const r = await handlePublicPreview(
+        anonymousPreview(path, method, method === "POST" ? {} : undefined),
+        env,
+        ctx,
+      );
+      assert.equal(r.status, 403, path + method);
+    }
+  }
+  assert.equal(
+    (
+      await handleAPI(
+        new Request("https://demo.example/api/workspace"),
+        env,
+        ctx,
+      )
+    ).status,
+    401,
+  );
+});
+test("public preview rejects writes from another site", async () => {
+  const { env } = setup();
+  const r = await handlePublicPreview(
+    new Request("https://demo.example/api/demo/initialise", {
+      method: "POST",
+      headers: { Origin: "https://evil.example" },
+      body: "{}",
+    }),
+    env,
+    ctx,
+  );
+  assert.equal(r.status, 403);
+});
+test("public preview HTML anchors assets at the site root and selects the demo API", () => {
+  const html = publicPreviewHTML("<html><head></head><body></body></html>");
+  assert.match(html, /<base href="\/">/);
+  assert.match(html, /locomatch-public-demo/);
 });

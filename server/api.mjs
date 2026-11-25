@@ -298,7 +298,8 @@ export async function handleAPI(request, env, ctx = { waitUntil: () => {} }) {
         Object.assign(current, next);
         return { generated };
       });
-      ctx.waitUntil(dispatchOffers(env).catch(() => {}));
+      if (!env.PUBLIC_PREVIEW)
+        ctx.waitUntil(dispatchOffers(env).catch(() => {}));
       return json({
         revision: r.revision,
         state: r.state,

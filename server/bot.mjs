@@ -99,9 +99,9 @@ export function prepareAutomaticOffers(before, after) {
   bot.outbox = bot.outbox.slice(-500);
   return count;
 }
-export function promotionFor(s, b, language) {
+export function promotionFor(s, b, language, simulation = false) {
   const eligible = s.products
-    .filter((p) => matchBuyer(p, b).eligible)
+    .filter((p) => (!p.demoOnly || simulation) && matchBuyer(p, b).eligible)
     .sort((a, b) => String(b.verifiedAt).localeCompare(String(a.verifiedAt)));
   if (!eligible.length)
     return language === "zh"
@@ -230,7 +230,7 @@ export function processIncoming(s, { from, body, sid, simulation = false }) {
       } else if (b.suppressed || session.optedOut)
         reply =
           "Promotions are paused for you. Reply START if you would like to opt in again.";
-      else reply = promotionFor(s, b, session.language || "en");
+      else reply = promotionFor(s, b, session.language || "en", simulation);
     }
   }
   history(s, {
@@ -249,6 +249,7 @@ export function canAutoSend(s, offer, phone, now = Date.now()) {
   return (
     !!b &&
     !!p &&
+    !p.demoOnly &&
     offer.status === "ready" &&
     session?.role === "customer" &&
     session.buyerId === b.id &&

@@ -2,6 +2,19 @@
 
 A working **FarmShare / CCAI9022 Group 3** prototype: simple stock entry, shared records, explainable customer matching and a real WhatsApp webhook.
 
+## Public preview
+
+Open **https://locomatch-farmshare-ccai9022.miizamovnurtilek.chatgpt.site/demo** to try the app without signing in. Visitors can edit demo products/customers, use photo and text capture, verify stock, create offers and run the bot simulator.
+
+### Present it in 10 seconds
+
+1. A 40-jar marmalade example is already selected. Tap **Find customers** to save it and show two matching buyers.
+2. Tap **Show WhatsApp message** to see a personalised message from that stock record.
+
+Choose **120 jars** to demonstrate four matches instead. **Try again** restarts the presentation and reuses the same sample records. **View database** opens the editable records. **Use my voice, photo or text** opens real input. Sample facts are labelled as pre-checked and excluded from live WhatsApp sending.
+
+The public preview uses a separate, shared sample-data workspace. It cannot read the owner’s live conversations or credentials and cannot dispatch real WhatsApp messages. The private staff workspace remains at the Site root.
+
 ## Run locally
 
 Requires Node.js 22.13 or newer.
@@ -21,7 +34,7 @@ npm run build
 
 ## For production staff
 
-The first page offers three large actions: **Speak an update**, **Take or upload a photo**, and **Type a short update**. Review the suggested product, quantity and expiry, then save for sales review. A known product reuses its price/storage/delivery settings as suggestions; a new batch still requires verification.
+Choose **Use my voice, photo or text** below the quick demo to open: **Speak an update**, **Take or upload a photo**, and **Type a short update**. Review the suggested product, quantity and expiry, then save for sales review. A known product reuses its price/storage/delivery settings as suggestions; a new batch still requires verification.
 
 Speech uses the browser's recognition service with Cantonese requested. Availability depends on the browser/device and may require an internet connection. The photo route runs Tesseract OCR in the browser; it downloads recognition models, but the photo is not sent to an OCR API. Printed sheets work better than handwriting. Both inputs retain an ordinary text-editing fallback. No OpenAI API key is needed or used.
 

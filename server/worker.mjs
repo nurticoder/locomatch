@@ -1,8 +1,27 @@
 import { handleAPI, isStaff } from "./api.mjs";
 import assets from "./assets.generated.mjs";
+import { handlePublicPreview, publicPreviewHTML } from "./public-preview.mjs";
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/demo/"))
+      return handlePublicPreview(request, env, ctx);
+    if (url.pathname === "/demo" || url.pathname === "/demo/")
+      return new Response(publicPreviewHTML(assets["/index.html"].body), {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    const publicAsset = assets[url.pathname];
+    if (publicAsset && !url.pathname.endsWith(".html"))
+      return new Response(publicAsset.body, {
+        headers: {
+          "Content-Type": publicAsset.type,
+          "Cache-Control": "no-cache",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
     if (url.pathname.startsWith("/api/")) return handleAPI(request, env, ctx);
     if (!isStaff(request, env))
       return new Response(

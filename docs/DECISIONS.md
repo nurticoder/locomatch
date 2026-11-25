@@ -46,3 +46,11 @@ D1 stores a small versioned shared workspace document and separately encrypted W
 A real Twilio webhook verifies the full URL and all submitted form fields using HMAC-SHA1, validates the account/recipient, and deduplicates MessageSid values. Automated pushes require current product and customer facts, explicit opt-in and an active 24-hour reply window. A claimed outbound message is not automatically retried on an uncertain result. Signed provider callbacks distinguish accepted, sent, delivered and failed.
 
 The host audience can become public only after explicit user approval. The worker continues to enforce owner sign-in on staff pages/data and settings; only signed provider webhook routes are exposed anonymously. Demo enrollment commands use fictional profiles and must be replaced by real enrollment before operational use.
+
+## Public review link
+
+The user requested a public GitHub repository and a working no-login preview for a friend. The repository is public. `/demo` serves the same interface with an explicit demo API prefix. Allowed public operations use the `public-preview` workspace row; staff records remain in `main`. Public routes cannot read credentials, receive live webhooks or dispatch messages. Static scripts/styles are public, while private API data retains the staff guard. This provides working editing and matching without publishing the owner's real contacts or provider configuration.
+
+## Two-tap classroom presentation
+
+The default screen uses complete, pre-checked fictional stock facts. Find customers saves a stable sample record and applies the ordinary matching rules; Show WhatsApp message displays a factual template for an eligible customer. Choosing 40 or 120 jars changes the eligible buyers. Stable identifiers make rehearsal repeatable without accumulating batches. The sample-only flag prevents automatic sending and excludes these records from real bot replies; explicit simulations may use them. Real voice/photo input remains available and still needs source verification.
